@@ -1,3 +1,4 @@
+// Copyright 2025 Aly Raffauf
 // nynx
 // A minimal NixOS deployment tool in Go.
 // Usage:
