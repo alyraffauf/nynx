@@ -63,7 +63,7 @@ func run(cmd string, args ...string) []byte {
 	return out
 }
 
-func validateDeployments(hosts map[string]HostSpec) bool {
+func validateJobs(hosts map[string]HostSpec) bool {
 	hasErrors := false
 
 	for name, spec := range hosts {
@@ -132,7 +132,7 @@ func main() {
 
 	info("Validating jobs...")
 
-	if validateDeployments(hosts) {
+	if validateJobs(hosts) {
 		info("✔ Jobs validated.")
 
 	} else {
