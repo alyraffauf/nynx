@@ -63,6 +63,31 @@ func run(cmd string, args ...string) []byte {
 	return out
 }
 
+func validateDeployments(hosts map[string]HostSpec) bool {
+	hasErrors := false
+
+	for name, spec := range hosts {
+		if spec.Output == "" {
+			warn("Invalid 'output' for job: %s.", name)
+			hasErrors = true
+		}
+		if spec.Hostname == "" {
+			warn("Invalid 'hostname' for job: %s.", name)
+			hasErrors = true
+		}
+		if spec.User == "" {
+			warn("Invalid 'user' for job: %s.", name)
+			hasErrors = true
+		}
+		if spec.Type != "nixos" && spec.Type != "darwin" {
+			warn("Unsupported system type '%s' for job: %s. Must be 'nixos' or 'darwin'.", spec.Type, name)
+			hasErrors = true
+		}
+	}
+
+	return !hasErrors
+}
+
 func main() {
 	flakeFlag := flag.String("flake", "", "Flake specification")
 	opFlag := flag.String("operation", "", "Operation to perform")
@@ -102,7 +127,16 @@ func main() {
 	data := runJSON("nix", "eval", "--json", "-f", cfg)
 	hosts := make(map[string]HostSpec)
 	if err := json.Unmarshal(data, &hosts); err != nil {
-		fatal("invalid JSON in %s: %v", cfg, err)
+		fatal("Invalid JSON in %s: %v", cfg, err)
+	}
+
+	info("Validating jobs...")
+
+	if validateDeployments(hosts) {
+		info("✔ Jobs validated.")
+
+	} else {
+		fatal("Validation failed. Please fix the errors above.")
 	}
 
 	// Build closures
@@ -119,20 +153,18 @@ func main() {
 		case "nixos":
 			expr := fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.toplevel", flake, spec.Output)
 			data = runJSON("nix", "build", "--no-link", "--json", expr)
-		default:
-			fatal("unsupported system type: %s", spec.Type)
 		}
 
 		var res []BuildResult
 		if err := json.Unmarshal(data, &res); err != nil {
-			fatal("bad build JSON for %s: %v", name, err)
+			fatal("Bad build JSON for %s: %v", name, err)
 		}
 		if len(res) == 0 {
-			fatal("no outputs for %s", name)
+			fatal("No outputs for %s", name)
 		}
 		out, ok := res[0].Outputs["out"]
 		if !ok {
-			fatal("missing 'out' for %s", name)
+			fatal("Missing 'out' for %s", name)
 		}
 		outs[name] = out
 		info("✔ Built: %s", out)
