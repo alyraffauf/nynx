@@ -45,7 +45,7 @@
 
       nynx = pkgs.buildGoModule {
         pname = "nynx";
-        src = self;
+        src = ./src;
         vendorHash = null;
 
         version =
