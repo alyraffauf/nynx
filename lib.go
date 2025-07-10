@@ -67,27 +67,28 @@ func loadDeploymentSpec(cfg string) (map[string]HostSpec, error) {
 	return hosts, nil
 }
 
-func validateJobs(hosts map[string]HostSpec) bool {
-	hasErrors := false
+func validateJobs(hosts map[string]HostSpec) (map[string]HostSpec, error) {
+	validated := make(map[string]HostSpec)
 
 	for name, spec := range hosts {
+		// Infer Output if missing
 		if spec.Output == "" {
-			warn("Invalid 'output' for job: %s.", name)
-			hasErrors = true
+			spec.Output = name
 		}
+		// Infer Hostname if missing
 		if spec.Hostname == "" {
-			warn("Invalid 'hostname' for job: %s.", name)
-			hasErrors = true
+			spec.Hostname = name
 		}
+
 		if spec.User == "" {
-			warn("Invalid 'user' for job: %s.", name)
-			hasErrors = true
+			return nil, fmt.Errorf("Missing user for job: %s", name)
 		}
 		if spec.Type != "nixos" && spec.Type != "darwin" {
-			warn("Unsupported system type '%s' for job: %s. Must be 'nixos' or 'darwin'.", spec.Type, name)
-			hasErrors = true
+			return nil, fmt.Errorf("Unsupported system type '%s' for job: %s", spec.Type, name)
 		}
+
+		validated[name] = spec
 	}
 
-	return !hasErrors
+	return validated, nil
 }

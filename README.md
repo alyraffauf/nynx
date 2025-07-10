@@ -39,8 +39,8 @@ Nynx is configured with a Nix attrset that defines the hosts and their configura
 ```nix
 {
   host1 = {
-    output = "host1";
-    hostname = "192.168.1.1";
+    output = "host1"; # Will be inferred from job name if not present.
+    hostname = "192.168.1.1"; # Also inferred from job name if not present.
     type = "nixos";
     user = "root";
   };
