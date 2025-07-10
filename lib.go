@@ -33,16 +33,16 @@ func info(format string, args ...any) {
 	fmt.Printf("[nynx] "+format+"\n", args...)
 }
 
-func runJSON(cmd string, args ...string) []byte {
+func runJSON(cmd string, args ...string) ([]byte, error) {
 	c := exec.Command(cmd, args...)
 	out, err := c.Output() // only capture stdout
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			fatal("`%s %v` failed: %s", cmd, args, string(ee.Stderr))
+			return nil, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(ee.Stderr))
 		}
-		fatal("`%s %v` failed: %v", cmd, args, err)
+		return nil, fmt.Errorf("`%s %v` failed: %v", cmd, args, err)
 	}
-	return out
+	return out, nil
 }
 
 func run(cmd string, args ...string) []byte {
@@ -56,7 +56,10 @@ func run(cmd string, args ...string) []byte {
 
 func loadDeploymentSpec(cfg string) (map[string]HostSpec, error) {
 	// Nix -> JSON
-	data := runJSON("nix", "eval", "--json", "-f", cfg)
+	data, err := runJSON("nix", "eval", "--json", "-f", cfg)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to run nix eval on %s: %w", cfg, err)
+	}
 	hosts := make(map[string]HostSpec)
 	if err := json.Unmarshal(data, &hosts); err != nil {
 		return nil, fmt.Errorf("Invalid JSON in %s: %w", cfg, err)

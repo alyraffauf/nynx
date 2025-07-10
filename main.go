@@ -60,17 +60,20 @@ func main() {
 	for name, spec := range hosts {
 		info("Building %s#%s...", flake, spec.Output)
 
-		var data []byte
+		var expr string
 
 		switch spec.Type {
 		case "darwin":
-			expr := fmt.Sprintf("%s#darwinConfigurations.%s.config.system.build.toplevel", flake, spec.Output)
-			data = runJSON("nix", "build", "--no-link", "--json", expr)
+			expr = fmt.Sprintf("%s#darwinConfigurations.%s.config.system.build.toplevel", flake, spec.Output)
 		case "nixos":
-			expr := fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.toplevel", flake, spec.Output)
-			data = runJSON("nix", "build", "--no-link", "--json", expr)
+			expr = fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.toplevel", flake, spec.Output)
 		default:
 			fatal("Unsupported system type: %s", spec.Type)
+		}
+
+		data, err := runJSON("nix", "build", "--no-link", "--json", expr)
+		if err != nil {
+			fatal("Failed to build %s: %v", name, err)
 		}
 
 		var res []BuildResult
