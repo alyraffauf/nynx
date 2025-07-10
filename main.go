@@ -55,6 +55,13 @@ func main() {
 		fatal("Failed to load deployment specs: %v", err)
 	}
 
+	if validateJobs(hosts) {
+		info("✔ Deployments validated.")
+	} else {
+		fatal("Invalid deployments! Please check your configuration.")
+
+	}
+
 	// Build closures
 	outs := make(map[string]string, len(hosts))
 	for name, spec := range hosts {
