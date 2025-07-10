@@ -2,7 +2,7 @@
 
 A Flake deployer for distributed NixOS and Darwin clusters. Useful for quickly deploying the same flake revision to multiple machines in parallel.
 
-Mainly a personal project to serve some specific needs of mine (outlined [here](https://aly.codes/blog/2025-05-19-mildly-better-flake-deployments/), but it may be helpful to others as well. Also, it's my first time writing Go (please be gentle).
+Mainly a personal project to serve some specific needs of mine (outlined [here](https://aly.codes/blog/2025-05-19-mildly-better-flake-deployments/)), but it may be helpful to others as well. Also, it's my first time writing Go (please be gentle).
 
 ## Usage
 
