@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -51,6 +52,16 @@ func run(cmd string, args ...string) []byte {
 		fatal("`%s %v` failed: %s", cmd, args, string(out))
 	}
 	return out
+}
+
+func loadDeploymentSpec(cfg string) (map[string]HostSpec, error) {
+	// Nix -> JSON
+	data := runJSON("nix", "eval", "--json", "-f", cfg)
+	hosts := make(map[string]HostSpec)
+	if err := json.Unmarshal(data, &hosts); err != nil {
+		return nil, fmt.Errorf("Invalid JSON in %s: %w", cfg, err)
+	}
+	return hosts, nil
 }
 
 func validateJobs(hosts map[string]HostSpec) bool {

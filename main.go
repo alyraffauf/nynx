@@ -50,20 +50,9 @@ func main() {
 	info("Operation: %s", op)
 	info("Config: %s", cfg)
 
-	// Load deployment specs (JSON-only)
-	data := runJSON("nix", "eval", "--json", "-f", cfg)
-	hosts := make(map[string]HostSpec)
-	if err := json.Unmarshal(data, &hosts); err != nil {
-		fatal("Invalid JSON in %s: %v", cfg, err)
-	}
-
-	info("Validating jobs...")
-
-	if validateJobs(hosts) {
-		info("✔ Jobs validated.")
-
-	} else {
-		fatal("Validation failed. Please fix the errors above.")
+	hosts, err := loadDeploymentSpec(cfg)
+	if err != nil {
+		fatal("Failed to load deployment specs: %v", err)
 	}
 
 	// Build closures
@@ -80,6 +69,8 @@ func main() {
 		case "nixos":
 			expr := fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.toplevel", flake, spec.Output)
 			data = runJSON("nix", "build", "--no-link", "--json", expr)
+		default:
+			fatal("Unsupported system type: %s", spec.Type)
 		}
 
 		var res []BuildResult
