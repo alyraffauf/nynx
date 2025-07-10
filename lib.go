@@ -45,13 +45,13 @@ func runJSON(cmd string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-func run(cmd string, args ...string) []byte {
+func run(cmd string, args ...string) ([]byte, error) {
 	c := exec.Command(cmd, args...)
 	out, err := c.CombinedOutput()
 	if err != nil {
-		fatal("`%s %v` failed: %s", cmd, args, string(out))
+		return out, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(out))
 	}
-	return out
+	return out, nil
 }
 
 func loadDeploymentSpec(cfg string) (map[string]HostSpec, error) {

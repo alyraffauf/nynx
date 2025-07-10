@@ -104,24 +104,33 @@ func main() {
 			info("✔ Copied %s to %s", path, target)
 			info("Deploying %s#%s to %s...", flake, spec.Output, target)
 
+			var cmds [][]string
+
 			switch spec.Type {
 			case "darwin":
 				switch op {
 				case "test":
-					warn("nix-darwin does not support 'test' operation, using 'switch' instead.")
+					warn("Nix-darwin does not support 'test' operation, using 'switch' instead.")
 					fallthrough
 				case "switch":
-					run("ssh", target, "sudo", "nix-env", "-p", "/nix/var/nix/profiles/system", "--set", path)
+					cmds = append(cmds, []string{"ssh", target, "sudo", "nix-env", "-p", "/nix/var/nix/profiles/system", "--set", path})
 					fallthrough // we always want to activate
 				case "activate":
-					run("ssh", target, "sudo", path+"/activate")
+					cmds = append(cmds, []string{"ssh", target, "sudo", path + "/activate"})
 				default:
-					fatal("unsupported darwin operation: %s", op)
+					fatal("Unsupported darwin operation: %s", op)
 				}
 			case "nixos":
-				run("ssh", target, "sudo", path+"/bin/switch-to-configuration", op)
+				cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
 			default:
-				fatal("unsupported system type: %s", spec.Type)
+				fatal("Unsupported system type: %s", spec.Type)
+			}
+
+			for _, cmd := range cmds {
+				_, err := run(cmd[0], cmd[1:]...)
+				if err != nil {
+					fatal("Failed to activate: %v", err)
+				}
 			}
 
 			info("✔ Deployed %s#%s to %s", flake, spec.Output, target)
