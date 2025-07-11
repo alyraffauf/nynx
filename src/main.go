@@ -97,21 +97,18 @@ func main() {
 		jobs = selectedJobs
 	}
 
+	err = validateOperations(jobs, op)
+	if err != nil {
+		fatal("Invalid operation: %v", err)
+	} else {
+		info("✔ Operations validated.")
+	}
+
 	// Build closures
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
 		info("Building %s#%s...", flake, spec.Output)
-
-		var expr string
-
-		switch spec.Type {
-		case "darwin":
-			expr = fmt.Sprintf("%s#darwinConfigurations.%s.config.system.build.toplevel", flake, spec.Output)
-		case "nixos":
-			expr = fmt.Sprintf("%s#nixosConfigurations.%s.config.system.build.toplevel", flake, spec.Output)
-		default:
-			fatal("Unsupported system type: %s", spec.Type)
-		}
+		expr := fmt.Sprintf("%s#%sConfigurations.%s.config.system.build.toplevel", flake, spec.Type, spec.Output)
 
 		data, err := runJSON("nix", "build", "--no-link", "--json", expr)
 		if err != nil {
@@ -122,13 +119,13 @@ func main() {
 		if err := json.Unmarshal(data, &res); err != nil {
 			fatal("Bad build JSON for %s: %v", name, err)
 		}
-		if len(res) == 0 {
-			fatal("No outputs for %s", name)
-		}
+
 		out, ok := res[0].Outputs["out"]
+
 		if !ok {
 			fatal("Missing 'out' for %s", name)
 		}
+
 		outs[name] = out
 		info("✔ Built: %s", out)
 	}
@@ -141,32 +138,25 @@ func main() {
 			defer wg.Done()
 			target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
 			path := outs[name]
-			info("Copying %s to %s...", path, target)
-			run("nix", "copy", "--to", "ssh://"+target, path)
-			info("✔ Copied %s to %s", path, target)
-			info("Deploying %s#%s to %s...", flake, spec.Output, target)
-
 			var cmds [][]string
 
 			switch spec.Type {
 			case "darwin":
 				switch op {
-				case "test":
-					warn("Nix-darwin does not support 'test' operation, using 'switch' instead.")
-					fallthrough
-				case "switch":
+				case "switch", "test":
 					cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", "nix-env", "-p", "/nix/var/nix/profiles/system", "--set", path})
 					fallthrough // we always want to activate
 				case "activate":
 					cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", path + "/activate"})
-				default:
-					fatal("Unsupported darwin operation: %s", op)
 				}
 			case "nixos":
 				cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
-			default:
-				fatal("Unsupported system type: %s", spec.Type)
 			}
+
+			info("Copying %s to %s...", path, target)
+			run("nix", "copy", "--to", "ssh://"+target, path)
+			info("✔ Copied %s to %s", path, target)
+			info("Deploying %s#%s to %s...", flake, spec.Output, target)
 
 			for _, cmd := range cmds {
 				_, err := run(cmd[0], cmd[1:]...)
