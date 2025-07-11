@@ -8,7 +8,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -104,31 +103,23 @@ func main() {
 		info("✔ Operations validated.")
 	}
 
-	// Build closures
+	info("Building closures for %d job%s...", len(jobs), func() string {
+		if len(jobs) != 1 {
+			return "s"
+		}
+		return ""
+	}())
+
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
 		info("Building %s#%s...", flake, spec.Output)
-		expr := fmt.Sprintf("%s#%sConfigurations.%s.config.system.build.toplevel", flake, spec.Type, spec.Output)
-
-		data, err := runJSON("nix", "build", "--no-link", "--json", expr)
+		out, err := buildClosure(flake, spec)
 		if err != nil {
-			fatal("Failed to build %s: %v", name, err)
+			fatal("Error building closures: %v", err)
 		}
-
-		var res []BuildResult
-		if err := json.Unmarshal(data, &res); err != nil {
-			fatal("Bad build JSON for %s: %v", name, err)
-		}
-
-		out, ok := res[0].Outputs["out"]
-
-		if !ok {
-			fatal("Missing 'out' for %s", name)
-		}
-
 		outs[name] = out
-		info("✔ Built: %s", out)
 	}
+	info("✔ Closures built successfully.")
 
 	// Copy closures
 	var wg sync.WaitGroup

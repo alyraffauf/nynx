@@ -20,6 +20,27 @@ type JobSpec struct {
 	User     string `json:"user"`     // ssh user
 }
 
+func buildClosure(flake string, spec JobSpec) (string, error) {
+	expr := fmt.Sprintf("%s#%sConfigurations.%s.config.system.build.toplevel", flake, spec.Type, spec.Output)
+
+	data, err := runJSON("nix", "build", "--no-link", "--json", expr)
+	if err != nil {
+		return "", fmt.Errorf("Failed to build %s: %v", spec.Output, err)
+	}
+
+	var res []BuildResult
+	if err := json.Unmarshal(data, &res); err != nil {
+		return "", fmt.Errorf("Bad build JSON for %s: %v", spec.Output, err)
+	}
+
+	out, ok := res[0].Outputs["out"]
+	if !ok {
+		return "", fmt.Errorf("Missing 'out' for %s", spec.Output)
+	}
+
+	return out, nil
+}
+
 func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "[nynx] Error: "+format+"\n", args...)
 	os.Exit(1)
