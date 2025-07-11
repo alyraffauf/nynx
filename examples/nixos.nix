@@ -12,14 +12,15 @@ in {
     user = "root";
   };
 
-  lavaridge = mkHost "nixos" "root"; # Use a helper function to create a host.
+  # Create a job with a helper function.
+  lavaridge = mkHost "nixos" "root";
 
-  lilycove =
+  lilycove = # Override attributes.
     mkHost "nixos" "root"
     // {
       output = "lilycove";
       hostname = "lilycove";
-    }; # Override your helper function's attributes.
+    };
 
   mauville = {
     output = "mauville";
