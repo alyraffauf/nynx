@@ -1,26 +1,25 @@
-{
+let
+  mkHost = type: user: {
+    inherit type user;
+  };
+in {
   # Example NixOS deployments
 
-  evergrande = {
+  evergrande = rec {
     output = "evergrande";
-    hostname = "evergrande";
+    hostname = "${output}"; # Interpolate strings.
     type = "nixos";
     user = "root";
   };
 
-  lavaridge = {
-    output = "lavaridge";
-    hostname = "lavaridge";
-    type = "nixos";
-    user = "root";
-  };
+  lavaridge = mkHost "nixos" "root"; # Use a helper function to create a host.
 
-  lilycove = {
-    output = "lilycove";
-    hostname = "lilycove";
-    type = "nixos";
-    user = "root";
-  };
+  lilycove =
+    mkHost "nixos" "root"
+    // {
+      output = "lilycove";
+      hostname = "lilycove";
+    }; # Override your helper function's attributes.
 
   mauville = {
     output = "mauville";
