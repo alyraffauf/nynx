@@ -37,12 +37,15 @@ func main() {
 	opFlag := flag.String("operation", opDefault, "Operation to perform.")
 	cfgFlag := flag.String("deployments", cfgDefault, "Path to deployments file.")
 	jobsFlag := flag.String("jobs", "", "Filtered, comma-separated subset of deployment jobs to run.")
+	skipFlag := flag.String("skip", "", "Comma-separated list of deployment jobs to skip.")
+
 	flag.Parse()
 
 	flake := *flakeFlag
 	op := *opFlag
 	cfg := *cfgFlag
 	jobFilter := *jobsFlag
+	skipFilter := *skipFlag
 
 	info("Flake: %s", flake)
 	info("Operation: %s", op)
@@ -59,6 +62,22 @@ func main() {
 	}
 	jobs = validatedJobs
 	info("✔ Deployments validated.")
+
+	// Skip provided jobs
+	if skipFilter != "" {
+		skipJobs := strings.Split(skipFilter, ",")
+		for _, skipJob := range skipJobs {
+			skipJob = strings.TrimSpace(skipJob)
+			if skipJob == "" {
+				continue
+			}
+			if _, exists := jobs[skipJob]; exists {
+				delete(jobs, skipJob)
+			} else {
+				warn("Job '%s' not found in deployment specification.", skipJob)
+			}
+		}
+	}
 
 	// Filter jobs if --jobs is provided.
 	if jobFilter != "" {
