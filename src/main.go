@@ -71,7 +71,7 @@ func main() {
 			}
 			spec, ok := jobs[job]
 			if !ok {
-				fatal("Host '%s' not found in deployment specification", job)
+				fatal("Job '%s' not found in deployment specification", job)
 			}
 			selectedJobs[job] = spec
 		}
