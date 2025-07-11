@@ -7,21 +7,17 @@ import (
 	"os/exec"
 )
 
+// model 'nix build --json' output.
+type BuildResult struct {
+	Outputs map[string]string `json:"outputs"`
+}
+
 // Deployment spec for a single host.
 type HostSpec struct {
 	Output   string `json:"output"`   // flake output
 	Hostname string `json:"hostname"` // ssh host
 	Type     string `json:"type"`     // type (nixos, darwin)
 	User     string `json:"user"`     // ssh user
-}
-
-// model 'nix build --json' output.
-type BuildResult struct {
-	Outputs map[string]string `json:"outputs"`
-}
-
-func warn(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "[nynx] Warning: "+format+"\n", args...)
 }
 
 func fatal(format string, args ...any) {
@@ -31,27 +27,6 @@ func fatal(format string, args ...any) {
 
 func info(format string, args ...any) {
 	fmt.Printf("[nynx] "+format+"\n", args...)
-}
-
-func runJSON(cmd string, args ...string) ([]byte, error) {
-	c := exec.Command(cmd, args...)
-	out, err := c.Output() // only capture stdout
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(ee.Stderr))
-		}
-		return nil, fmt.Errorf("`%s %v` failed: %v", cmd, args, err)
-	}
-	return out, nil
-}
-
-func run(cmd string, args ...string) ([]byte, error) {
-	c := exec.Command(cmd, args...)
-	out, err := c.CombinedOutput()
-	if err != nil {
-		return out, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(out))
-	}
-	return out, nil
 }
 
 func loadDeploymentSpec(cfg string) (map[string]HostSpec, error) {
@@ -65,6 +40,27 @@ func loadDeploymentSpec(cfg string) (map[string]HostSpec, error) {
 		return nil, fmt.Errorf("Invalid JSON in %s: %w", cfg, err)
 	}
 	return hosts, nil
+}
+
+func run(cmd string, args ...string) ([]byte, error) {
+	c := exec.Command(cmd, args...)
+	out, err := c.CombinedOutput()
+	if err != nil {
+		return out, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(out))
+	}
+	return out, nil
+}
+
+func runJSON(cmd string, args ...string) ([]byte, error) {
+	c := exec.Command(cmd, args...)
+	out, err := c.Output() // only capture stdout
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(ee.Stderr))
+		}
+		return nil, fmt.Errorf("`%s %v` failed: %v", cmd, args, err)
+	}
+	return out, nil
 }
 
 func validateJobs(hosts map[string]HostSpec) (map[string]HostSpec, error) {
@@ -91,4 +87,8 @@ func validateJobs(hosts map[string]HostSpec) (map[string]HostSpec, error) {
 	}
 
 	return validated, nil
+}
+
+func warn(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "[nynx] Warning: "+format+"\n", args...)
 }
