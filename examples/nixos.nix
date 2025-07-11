@@ -15,7 +15,8 @@ in {
   # Create a job with a helper function.
   lavaridge = mkHost "nixos" "root";
 
-  lilycove = # Override attributes.
+  lilycove =
+    # Override attributes.
     mkHost "nixos" "root"
     // {
       output = "lilycove";
