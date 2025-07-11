@@ -169,6 +169,12 @@ func validateOperations(jobs map[string]JobSpec, op string) ([]string, error) {
 	return warnings, nil
 }
 
+func verboseInfo(verbose bool, format string, args ...any) {
+	if verbose {
+		info(format, args...)
+	}
+}
+
 func warn(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "[nynx] Warning: "+format+"\n", args...)
 }

@@ -37,6 +37,7 @@ func main() {
 	cfgFlag := flag.String("deployments", cfgDefault, "Path to deployments file.")
 	jobsFlag := flag.String("jobs", "", "Filtered, comma-separated subset of deployment jobs to run.")
 	skipFlag := flag.String("skip", "", "Comma-separated list of deployment jobs to skip.")
+	verboseFlag := flag.Bool("verbose", false, "Enable verbose output.")
 
 	flag.Parse()
 
@@ -45,22 +46,24 @@ func main() {
 	cfg := *cfgFlag
 	jobFilter := *jobsFlag
 	skipFilter := *skipFlag
+	verbose := *verboseFlag
 
-	info("Flake: %s", flake)
-	info("Operation: %s", op)
-	info("Config: %s", cfg)
+	verboseInfo(verbose, "Flake: %s", flake)
+	verboseInfo(verbose, "Operation: %s", op)
+	verboseInfo(verbose, "Config: %s", cfg)
 
 	jobs, err := loadDeploymentSpec(cfg)
 	if err != nil {
-		fatal("Failed to load deployment specs: %v", err)
+		fatal("Failed to load %s: %v", cfg, err)
 	}
 
 	validatedJobs, err := validateJobs(jobs)
 	if err != nil {
-		fatal("Invalid jobs! Please check your deployments: %v", err)
+		fatal("Invalid jobs! Please check %s: %v", err, cfg)
 	}
+
 	jobs = validatedJobs
-	info("✔ Deployments validated.")
+	verboseInfo(verbose, "✔ Deployments validated.")
 
 	// Skip provided jobs
 	if skipFilter != "" {
@@ -73,7 +76,7 @@ func main() {
 			if _, exists := jobs[skipJob]; exists {
 				delete(jobs, skipJob)
 			} else {
-				warn("Job '%s' not found in deployment specification.", skipJob)
+				warn("Job '%s' not found in %s.", skipJob, cfg)
 			}
 		}
 	}
@@ -89,7 +92,7 @@ func main() {
 			}
 			spec, ok := jobs[job]
 			if !ok {
-				fatal("Job '%s' not found in deployment specification", job)
+				fatal("Job '%s' not found in %s.", job, cfg)
 			}
 			selectedJobs[job] = spec
 		}
@@ -103,24 +106,24 @@ func main() {
 	if err != nil {
 		fatal("Invalid operation: %v", err)
 	} else {
-		info("✔ Operations validated.")
+		verboseInfo(verbose, "✔ Operations validated.")
 	}
 
-	info("Building closures for %d job(s)...", len(jobs))
+	verboseInfo(verbose, "Building closures for %d job(s)...", len(jobs))
 
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
-		info("Building %s#%s...", flake, spec.Output)
+		verboseInfo(verbose, "Building %s#%s...", flake, spec.Output)
 		out, err := buildClosure(flake, spec)
 		if err != nil {
-			fatal("Error building closures: %v", err)
+			fatal("Failure building closures: %v", err)
 		}
 		outs[name] = out
 
-		info("✔ Built %s#%s at %s.", flake, spec.Output, out)
+		info("✔ Built closure at %s.", out)
 	}
 
-	info("✔ Closures built successfully.")
+	verboseInfo(verbose, "✔ All closures built successfully.")
 
 	// Deploy closures and report errors as warnings.
 	// We don't want to immediately run fatal() on the first error,
@@ -135,7 +138,7 @@ func main() {
 			defer wg.Done()
 
 			target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
-			info("Deploying %s#%s to %s...", flake, spec.Output, target)
+			verboseInfo(verbose, "Deploying %s#%s to %s...", flake, spec.Output, target)
 			err := deployClosure(name, spec, outs, op)
 
 			if err != nil {
@@ -156,6 +159,6 @@ func main() {
 	if errorCount > 0 {
 		fatal("Jobs failed with %d error(s).", errorCount)
 	} else {
-		info("✔ Deployments complete.")
+		verboseInfo(verbose, "✔ Deployments complete.")
 	}
 }
