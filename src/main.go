@@ -147,7 +147,7 @@ func main() {
 				errors = append(errors, err)
 				mu.Unlock()
 			} else {
-				info("✔ Deployed %s#%s to %s", flake, spec.Output, target)
+				info("✔ Deployed %s#%s to %s.", flake, spec.Output, target)
 			}
 		}(name, spec)
 	}
