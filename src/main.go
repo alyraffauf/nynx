@@ -96,7 +96,10 @@ func main() {
 		jobs = selectedJobs
 	}
 
-	err = validateOperations(jobs, op)
+	warnings, err := validateOperations(jobs, op)
+	for _, warning := range warnings {
+		warn(warning)
+	}
 	if err != nil {
 		fatal("Invalid operation: %v", err)
 	} else {

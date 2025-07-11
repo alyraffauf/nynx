@@ -110,7 +110,8 @@ func validateJobs(jobs map[string]JobSpec) (map[string]JobSpec, error) {
 	return validated, nil
 }
 
-func validateOperations(jobs map[string]JobSpec, op string) error {
+func validateOperations(jobs map[string]JobSpec, op string) ([]string, error) {
+	var warnings []string
 	for _, spec := range jobs {
 		switch spec.Type {
 		case "darwin":
@@ -118,23 +119,23 @@ func validateOperations(jobs map[string]JobSpec, op string) error {
 			case "test", "switch", "activate":
 				// Since "test" is not supported, we treat it equivalent to "switch"
 				if op == "test" {
-					warn("Nix-darwin does not support 'test' operation, using 'switch' instead.")
+					warnings = append(warnings, "Nix-darwin does not support 'test' operation, using 'switch' instead.")
 				}
 			default:
-				return fmt.Errorf("unsupported darwin operation: %s", op)
+				return warnings, fmt.Errorf("unsupported darwin operation: %s", op)
 			}
 		case "nixos":
 			switch op {
 			case "test", "switch":
 				continue
 			default:
-				return fmt.Errorf("unsupported NixOS operation: %s", op)
+				return warnings, fmt.Errorf("unsupported NixOS operation: %s", op)
 			}
 		default:
-			return fmt.Errorf("unsupported system type: %s", spec.Type)
+			return warnings, fmt.Errorf("unsupported system type: %s", spec.Type)
 		}
 	}
-	return nil
+	return warnings, nil
 }
 
 func warn(format string, args ...any) {
