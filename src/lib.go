@@ -41,6 +41,41 @@ func buildClosure(flake string, spec JobSpec) (string, error) {
 	return out, nil
 }
 
+func deployClosure(name string, spec JobSpec, outs map[string]string, flake string, op string) error {
+	target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
+	path := outs[name]
+	var cmds [][]string
+
+	switch spec.Type {
+	case "darwin":
+		switch op {
+		case "switch", "test":
+			cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", "nix-env", "-p", "/nix/var/nix/profiles/system", "--set", path})
+			fallthrough // we always want to activate
+		case "activate":
+			cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", path + "/activate"})
+		}
+	case "nixos":
+		cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
+	}
+
+	info("Copying %s to %s...", path, target)
+	if _, err := run("nix", "copy", "--to", "ssh://"+target, path); err != nil {
+		return fmt.Errorf("error copying to %s: %v", target, err)
+	}
+	info("✔ Copied %s to %s", path, target)
+	info("Deploying %s#%s to %s...", flake, spec.Output, target)
+
+	for _, cmd := range cmds {
+		if _, err := run(cmd[0], cmd[1:]...); err != nil {
+			return fmt.Errorf("failed to activate on %s: %v", target, err)
+		}
+	}
+
+	info("✔ Deployed %s#%s to %s", flake, spec.Output, target)
+	return nil
+}
+
 func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "[nynx] Error: "+format+"\n", args...)
 	os.Exit(1)

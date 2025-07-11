@@ -9,7 +9,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -106,12 +105,7 @@ func main() {
 		info("✔ Operations validated.")
 	}
 
-	info("Building closures for %d job%s...", len(jobs), func() string {
-		if len(jobs) != 1 {
-			return "s"
-		}
-		return ""
-	}())
+	info("Building closures for %d job(s)...", len(jobs))
 
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
@@ -124,47 +118,38 @@ func main() {
 
 		info("✔ Built %s#%s at %s.", flake, spec.Output, out)
 	}
+
 	info("✔ Closures built successfully.")
 
-	// Copy closures
+	// Deploy closures and report errors as warnings.
+	// We don't want to immediately run fatal() on the first error,
+	// Because this could leave hosts in even more inconsistent states.
 	var wg sync.WaitGroup
+	var errors []error
+	var mu sync.Mutex
+
 	for name, spec := range jobs {
 		wg.Add(1)
 		go func(name string, spec JobSpec) {
 			defer wg.Done()
-			target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
-			path := outs[name]
-			var cmds [][]string
 
-			switch spec.Type {
-			case "darwin":
-				switch op {
-				case "switch", "test":
-					cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", "nix-env", "-p", "/nix/var/nix/profiles/system", "--set", path})
-					fallthrough // we always want to activate
-				case "activate":
-					cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", path + "/activate"})
-				}
-			case "nixos":
-				cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
+			err := deployClosure(name, spec, outs, flake, op)
+			if err != nil {
+				warn("%v", err)
+				mu.Lock()
+				errors = append(errors, err)
+				mu.Unlock()
 			}
-
-			info("Copying %s to %s...", path, target)
-			run("nix", "copy", "--to", "ssh://"+target, path)
-			info("✔ Copied %s to %s", path, target)
-			info("Deploying %s#%s to %s...", flake, spec.Output, target)
-
-			for _, cmd := range cmds {
-				_, err := run(cmd[0], cmd[1:]...)
-				if err != nil {
-					fatal("Failed to activate: %v", err)
-				}
-			}
-
-			info("✔ Deployed %s#%s to %s", flake, spec.Output, target)
 		}(name, spec)
 	}
 
 	wg.Wait()
-	info("✔ Deployments complete.")
+
+	errorCount := len(errors)
+
+	if errorCount > 0 {
+		fatal("Jobs failed with %d error(s).", errorCount)
+	} else {
+		info("✔ Deployments complete.")
+	}
 }
