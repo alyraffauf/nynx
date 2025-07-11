@@ -121,6 +121,8 @@ func main() {
 			fatal("Error building closures: %v", err)
 		}
 		outs[name] = out
+
+		info("✔ Built %s#%s at %s.", flake, spec.Output, out)
 	}
 	info("✔ Closures built successfully.")
 
