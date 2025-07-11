@@ -65,8 +65,8 @@ func main() {
 
 	// Skip provided jobs
 	if skipFilter != "" {
-		skipJobs := strings.Split(skipFilter, ",")
-		for _, skipJob := range skipJobs {
+		skipJobs := strings.SplitSeq(skipFilter, ",")
+		for skipJob := range skipJobs {
 			skipJob = strings.TrimSpace(skipJob)
 			if skipJob == "" {
 				continue
