@@ -24,6 +24,8 @@ nix run .#nynx -- --flake <flake-url> --operation <operation> --deployments <dep
 - `--operation`: Operation to perform (`switch`, or `activate` for Darwin; `boot`, `test`, `switch` for NixOS).
 - `--deployments`: Path to the `deployments.nix` file (default: `deployments.nix`).
 - `--jobs`: Comma-separated subset of jobs to run (default: all jobs).
+- `--skip`: Skip a comma-separated subset of jobs.
+- `--verbose`: Enable verbose output.
 
 ### Example
 
