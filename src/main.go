@@ -120,10 +120,10 @@ func main() {
 					warn("Nix-darwin does not support 'test' operation, using 'switch' instead.")
 					fallthrough
 				case "switch":
-					cmds = append(cmds, []string{"ssh", target, "sudo", "nix-env", "-p", "/nix/var/nix/profiles/system", "--set", path})
+					cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", "nix-env", "-p", "/nix/var/nix/profiles/system", "--set", path})
 					fallthrough // we always want to activate
 				case "activate":
-					cmds = append(cmds, []string{"ssh", target, "sudo", path + "/activate"})
+					cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", path + "/activate"})
 				default:
 					fatal("Unsupported darwin operation: %s", op)
 				}
