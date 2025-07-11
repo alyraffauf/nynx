@@ -9,6 +9,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -133,12 +134,17 @@ func main() {
 		go func(name string, spec JobSpec) {
 			defer wg.Done()
 
-			err := deployClosure(name, spec, outs, flake, op)
+			target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
+			info("Deploying %s#%s to %s...", flake, spec.Output, target)
+			err := deployClosure(name, spec, outs, op)
+
 			if err != nil {
 				warn("%v", err)
 				mu.Lock()
 				errors = append(errors, err)
 				mu.Unlock()
+			} else {
+				info("✔ Deployed %s#%s to %s", flake, spec.Output, target)
 			}
 		}(name, spec)
 	}

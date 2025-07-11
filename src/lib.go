@@ -41,7 +41,7 @@ func buildClosure(flake string, spec JobSpec) (string, error) {
 	return out, nil
 }
 
-func deployClosure(name string, spec JobSpec, outs map[string]string, flake string, op string) error {
+func deployClosure(name string, spec JobSpec, outs map[string]string, op string) error {
 	target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
 	path := outs[name]
 	var cmds [][]string
@@ -59,12 +59,9 @@ func deployClosure(name string, spec JobSpec, outs map[string]string, flake stri
 		cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
 	}
 
-	info("Copying %s to %s...", path, target)
 	if _, err := run("nix", "copy", "--to", "ssh://"+target, path); err != nil {
 		return fmt.Errorf("error copying to %s: %v", target, err)
 	}
-	info("✔ Copied %s to %s", path, target)
-	info("Deploying %s#%s to %s...", flake, spec.Output, target)
 
 	for _, cmd := range cmds {
 		if _, err := run(cmd[0], cmd[1:]...); err != nil {
@@ -72,7 +69,6 @@ func deployClosure(name string, spec JobSpec, outs map[string]string, flake stri
 		}
 	}
 
-	info("✔ Deployed %s#%s to %s", flake, spec.Output, target)
 	return nil
 }
 
