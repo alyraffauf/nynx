@@ -20,39 +20,46 @@ nix run .#nynx -- --flake <flake-url> --operation <operation> --deployments <dep
 
 ### Flags
 
-- `--flake`: Specify the flake URL (e.g., `github:alyraffauf/nixcfg`).
-- `--operation`: Operation to perform (`test`, `switch`, or `activate` for Darwin; `test`, `switch`, etc. for NixOS).
+- `--flake`: Specify the flake path or URL (e.g., `github:alyraffauf/nixcfg`).
+- `--operation`: Operation to perform (`switch`, or `activate` for Darwin; `boot`, `test`, `switch` for NixOS).
 - `--deployments`: Path to the `deployments.nix` file (default: `deployments.nix`).
+- `--jobs`: Comma-separated subset of jobs to run (default: all jobs).
 
 ### Example
 
-Deploy a flake to multiple hosts using Nix:
+Deploy a flake to all jobs defined in `deployments.nix`:
 
 ```
-nix run .#nynx -- -flake github:alyraffauf/nixcfg -operation switch -deployments deployments.nix
+nix run .#nynx -- --flake github:alyraffauf/nixcfg --operation switch
+```
+
+Run specific deployment jobs:
+
+```
+nix run .#nynx -- --flake github:alyraffauf/nixcfg --operation switch --jobs server,workstation
 ```
 
 ### Sample deployments.nix
 
-Nynx is configured with a Nix attrset that defines the hosts and their configurations.
+Nynx is configured with a Nix attrset that defines a set of deployment jobs.
 
 ```nix
 {
-  host1 = {
+  job1 = {
     output = "host1"; # Will be inferred from job name if not present.
     hostname = "192.168.1.1"; # Also inferred from job name if not present.
     type = "nixos";
     user = "root";
   };
 
-  host2 = {
+  job2 = {
     output = "host2";
     hostname = "website.com";
     type = "nixos";
     user = "root";
   };
 
-  host3 = {
+  job2 = {
     output = "host3";
     hostname = "host3.local";
     user = "root";

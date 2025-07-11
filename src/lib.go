@@ -12,8 +12,8 @@ type BuildResult struct {
 	Outputs map[string]string `json:"outputs"`
 }
 
-// Deployment spec for a single host.
-type HostSpec struct {
+// Deployment spec for a single job.
+type JobSpec struct {
 	Output   string `json:"output"`   // flake output
 	Hostname string `json:"hostname"` // ssh host
 	Type     string `json:"type"`     // type (nixos, darwin)
@@ -29,17 +29,17 @@ func info(format string, args ...any) {
 	fmt.Printf("[nynx] "+format+"\n", args...)
 }
 
-func loadDeploymentSpec(cfg string) (map[string]HostSpec, error) {
+func loadDeploymentSpec(cfg string) (map[string]JobSpec, error) {
 	// Nix -> JSON
 	data, err := runJSON("nix", "eval", "--json", "-f", cfg)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to run nix eval on %s: %w", cfg, err)
 	}
-	hosts := make(map[string]HostSpec)
-	if err := json.Unmarshal(data, &hosts); err != nil {
+	jobs := make(map[string]JobSpec)
+	if err := json.Unmarshal(data, &jobs); err != nil {
 		return nil, fmt.Errorf("Invalid JSON in %s: %w", cfg, err)
 	}
-	return hosts, nil
+	return jobs, nil
 }
 
 func run(cmd string, args ...string) ([]byte, error) {
@@ -63,10 +63,10 @@ func runJSON(cmd string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-func validateJobs(hosts map[string]HostSpec) (map[string]HostSpec, error) {
-	validated := make(map[string]HostSpec)
+func validateJobs(jobs map[string]JobSpec) (map[string]JobSpec, error) {
+	validated := make(map[string]JobSpec)
 
-	for name, spec := range hosts {
+	for name, spec := range jobs {
 		// Infer Output if missing
 		if spec.Output == "" {
 			spec.Output = name

@@ -12,59 +12,75 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 )
 
 func main() {
-	flakeFlag := flag.String("flake", "", "Flake specification")
-	opFlag := flag.String("operation", "", "Operation to perform")
-	cfgFlag := flag.String("deployments", "", "Path to deployments file")
+	flakeDefault := os.Getenv("FLAKE")
+	opDefault := os.Getenv("OPERATION")
+	cfgDefault := os.Getenv("DEPLOYMENTS")
+
+	if flakeDefault == "" {
+		flakeDefault = "."
+	}
+
+	if opDefault == "" {
+		opDefault = "test"
+	}
+
+	if cfgDefault == "" {
+		cfgDefault = "deployments.nix"
+	}
+
+	flakeFlag := flag.String("flake", flakeDefault, "Flake URL or path.")
+	opFlag := flag.String("operation", opDefault, "Operation to perform.")
+	cfgFlag := flag.String("deployments", cfgDefault, "Path to deployments file.")
+	jobsFlag := flag.String("jobs", "", "Filtered, comma-separated subset of deployment jobs to run.")
 	flag.Parse()
 
 	flake := *flakeFlag
 	op := *opFlag
 	cfg := *cfgFlag
-
-	if flake == "" {
-		flake = os.Getenv("FLAKE")
-		if flake == "" {
-			flake = "."
-		}
-	}
-
-	if op == "" {
-		op = os.Getenv("OPERATION")
-		if op == "" {
-			op = "test"
-		}
-	}
-
-	if cfg == "" {
-		cfg = os.Getenv("DEPLOYMENTS")
-		if cfg == "" {
-			cfg = "deployments.nix"
-		}
-	}
+	jobFilter := *jobsFlag
 
 	info("Flake: %s", flake)
 	info("Operation: %s", op)
 	info("Config: %s", cfg)
 
-	hosts, err := loadDeploymentSpec(cfg)
+	jobs, err := loadDeploymentSpec(cfg)
 	if err != nil {
 		fatal("Failed to load deployment specs: %v", err)
 	}
 
-	validatedHosts, err := validateJobs(hosts)
+	validatedJobs, err := validateJobs(jobs)
 	if err != nil {
-		fatal("Invalid deployments! Please check your configuration: %v", err)
+		fatal("Invalid jobs! Please check your deployments: %v", err)
 	}
-	hosts = validatedHosts
+	jobs = validatedJobs
 	info("✔ Deployments validated.")
 
+	// Filter jobs if --jobs is provided.
+	if jobFilter != "" {
+		selectedJobs := make(map[string]JobSpec)
+		jobList := strings.SplitSeq(jobFilter, ",")
+		for job := range jobList {
+			job = strings.TrimSpace(job)
+			if job == "" {
+				continue
+			}
+			spec, ok := jobs[job]
+			if !ok {
+				fatal("Host '%s' not found in deployment specification", job)
+			}
+			selectedJobs[job] = spec
+		}
+		jobs = selectedJobs
+	}
+
 	// Build closures
-	outs := make(map[string]string, len(hosts))
-	for name, spec := range hosts {
+	outs := make(map[string]string, len(jobs))
+	for name, spec := range jobs {
 		info("Building %s#%s...", flake, spec.Output)
 
 		var expr string
@@ -100,9 +116,9 @@ func main() {
 
 	// Copy closures
 	var wg sync.WaitGroup
-	for name, spec := range hosts {
+	for name, spec := range jobs {
 		wg.Add(1)
-		go func(name string, spec HostSpec) {
+		go func(name string, spec JobSpec) {
 			defer wg.Done()
 			target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
 			path := outs[name]
