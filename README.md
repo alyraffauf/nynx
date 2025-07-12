@@ -20,10 +20,11 @@ nix run .#nynx -- --flake <flake-url> --operation <operation> --deployments <dep
 
 ### Flags
 
-- `--flake`: Specify the flake path or URL (e.g., `github:alyraffauf/nixcfg`).
-- `--operation`: Operation to perform (`switch`, or `activate` for Darwin; `boot`, `test`, `switch` for NixOS).
+- `--build-host`: Specify the host on which to build closures (default: `localhost`).
 - `--deployments`: Path to the `deployments.nix` file (default: `deployments.nix`).
+- `--flake`: Specify the flake path or URL (e.g., `github:alyraffauf/nixcfg`).
 - `--jobs`: Comma-separated subset of jobs to run (default: all jobs).
+- `--operation`: Operation to perform (`switch`, or `activate` for Darwin; `boot`, `test`, `switch` for NixOS).
 - `--skip`: Skip a comma-separated subset of jobs.
 - `--verbose`: Enable verbose output.
 
