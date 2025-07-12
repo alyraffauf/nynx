@@ -20,18 +20,10 @@ type JobSpec struct {
 	User     string `json:"user"`     // ssh user
 }
 
-func buildClosure(flake string, spec JobSpec, builder string) (string, error) {
+func buildClosure(flake string, spec JobSpec) (string, error) {
 	expr := fmt.Sprintf("%s#%sConfigurations.%s.config.system.build.toplevel", flake, spec.Type, spec.Output)
 
-	var data []byte
-	var err error
-
-	if builder != "localhost" {
-		data, err = runJSON("nix", "build", "--no-link", "--json", "--store", fmt.Sprintf("ssh-ng://%s", builder), expr)
-	} else {
-		data, err = runJSON("nix", "build", "--no-link", "--json", expr)
-	}
-
+	data, err := runJSON("nix", "build", "--no-link", "--json", expr)
 	if err != nil {
 		return "", fmt.Errorf("Failed to build %s: %v", spec.Output, err)
 	}
@@ -44,10 +36,6 @@ func buildClosure(flake string, spec JobSpec, builder string) (string, error) {
 	out, ok := res[0].Outputs["out"]
 	if !ok {
 		return "", fmt.Errorf("Missing 'out' for %s", spec.Output)
-	} else if builder != "localhost" {
-		if _, err := run("nix", "copy", "--from", "ssh-ng://"+builder, out, "--no-check-sigs"); err != nil {
-			return "", fmt.Errorf("Error copying from %s: %v", builder, err)
-		}
 	}
 
 	return out, nil
@@ -71,7 +59,7 @@ func deployClosure(name string, spec JobSpec, outs map[string]string, op string)
 		cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
 	}
 
-	if _, err := run("nix", "copy", "--to", "ssh-ng://"+target, path); err != nil {
+	if _, err := run("nix", "copy", "--to", "ssh://"+target, path); err != nil {
 		return fmt.Errorf("error copying to %s: %v", target, err)
 	}
 
