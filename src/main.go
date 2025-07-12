@@ -32,19 +32,21 @@ func main() {
 		cfgDefault = "deployments.nix"
 	}
 
-	flakeFlag := flag.String("flake", flakeDefault, "Flake URL or path.")
-	opFlag := flag.String("operation", opDefault, "Operation to perform.")
+	buildHostFlag := flag.String("build-host", "localhost", "Build closures on a specified remote host instead of locally.")
 	cfgFlag := flag.String("deployments", cfgDefault, "Path to deployments file.")
+	flakeFlag := flag.String("flake", flakeDefault, "Flake URL or path.")
 	jobsFlag := flag.String("jobs", "", "Filtered, comma-separated subset of deployment jobs to run.")
+	opFlag := flag.String("operation", opDefault, "Operation to perform.")
 	skipFlag := flag.String("skip", "", "Comma-separated list of deployment jobs to skip.")
 	verboseFlag := flag.Bool("verbose", false, "Enable verbose output.")
 
 	flag.Parse()
 
-	flake := *flakeFlag
-	op := *opFlag
+	buildHost := *buildHostFlag
 	cfg := *cfgFlag
+	flake := *flakeFlag
 	jobFilter := *jobsFlag
+	op := *opFlag
 	skipFilter := *skipFlag
 	verbose := *verboseFlag
 
@@ -114,7 +116,8 @@ func main() {
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
 		verboseInfo(verbose, "Building %s#%s...", flake, spec.Output)
-		out, err := buildClosure(flake, spec)
+
+		out, err := buildClosure(flake, spec, buildHost)
 		if err != nil {
 			fatal("Failure building closures: %v", err)
 		}
