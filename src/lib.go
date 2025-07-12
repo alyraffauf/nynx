@@ -71,7 +71,7 @@ func deployClosure(name string, spec JobSpec, outs map[string]string, op string)
 		cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
 	}
 
-	if _, err := run("nix", "copy", "--to", "ssh-ng://"+target, path); err != nil {
+	if _, err := run("nix", "copy", "--to", "ssh-ng://"+target, path, "--no-check-sigs"); err != nil {
 		return fmt.Errorf("error copying to %s: %v", target, err)
 	}
 
