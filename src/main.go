@@ -32,7 +32,7 @@ func main() {
 		cfgDefault = "deployments.nix"
 	}
 
-	buildHostFlag := flag.String("build-host", "localhost", "Build closures on a specified remote host instead of locally.")
+	buildHostFlag := flag.String("build-host", "localhost", "Build closures on a specified remote host instead of locally (very experimental).")
 	cfgFlag := flag.String("deployments", cfgDefault, "Path to deployments file.")
 	flakeFlag := flag.String("flake", flakeDefault, "Flake URL or path.")
 	jobsFlag := flag.String("jobs", "", "Filtered, comma-separated subset of deployment jobs to run.")
