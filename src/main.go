@@ -111,13 +111,28 @@ func main() {
 		verboseInfo(verbose, "✔ Operations validated.")
 	}
 
+	verboseInfo(verbose, "Instantiating drvPath(s) for %d job(s)...", len(jobs))
+
+	drvPaths := make(map[string]string, len(jobs))
+	for name, spec := range jobs {
+		verboseInfo(verbose, "Instantiating drvPath for %s#%s...", flake, spec.Output)
+
+		drv, err := instantiateDrvPath(flake, spec, buildHost)
+		if err != nil {
+			fatal("Failed to instantiate drvPath for job '%s': %v", name, err)
+		}
+		drvPaths[name] = drv
+
+		info("✔ Instantiated drvPath for %s#%s.", flake, spec.Output)
+	}
+
 	verboseInfo(verbose, "Building closures for %d job(s)...", len(jobs))
 
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
 		verboseInfo(verbose, "Building %s#%s...", flake, spec.Output)
 
-		out, err := buildClosure(flake, spec, buildHost)
+		out, err := buildClosure(spec, drvPaths[name], buildHost)
 		if err != nil {
 			fatal("Failure building closures: %v", err)
 		}
