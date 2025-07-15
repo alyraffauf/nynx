@@ -1,5 +1,5 @@
 {
-  description = "A simple Flake deployer for distributed NixOS and Darwin clusters.";
+  description = "A Flake-native deployment tool for distributed NixOS and Darwin clusters.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
