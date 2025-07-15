@@ -15,13 +15,12 @@ nix build .#nynx
 Run deployments:
 
 ```
-nix run .#nynx -- --flake <flake-url> --operation <operation> --deployments <deployments-file>
+nix run .#nynx -- --flake <flake-url> --operation <operation>
 ```
 
 ### Flags
 
 - `--build-host`: Specify the host on which to build closures (default: `localhost`).
-- `--deployments`: Path to the `deployments.nix` file (default: `deployments.nix`).
 - `--flake`: Specify the flake path or URL (e.g., `github:alyraffauf/nixcfg`).
 - `--jobs`: Comma-separated subset of jobs to run (default: all jobs).
 - `--operation`: Operation to perform (`switch`, or `activate` for Darwin; `boot`, `test`, `switch` for NixOS).
@@ -42,31 +41,25 @@ Run specific deployment jobs:
 nix run .#nynx -- --flake github:alyraffauf/nixcfg --operation switch --jobs server,workstation
 ```
 
-### Sample deployments.nix
+### Sample #nynxDeployments
 
-Nynx is configured with a Nix attrset that defines a set of deployment jobs.
+Nynx is configured with a Flake output containing an attrset that defines a set of deployment jobs. Outputs can be declared in the same Flake or in an upstream Flake.
 
 ```nix
 {
-  job1 = {
-    output = "host1"; # Will be inferred from job name if not present.
-    hostname = "192.168.1.1"; # Also inferred from job name if not present.
-    type = "nixos";
-    user = "root";
-  };
+  nynxDeployments = {
+    evergrande = {
+      hostname = "evergrande"; # Will be assumed from deployment name if not specified.
+      output = self.inputs.nixcfg.nixosConfigurations.evergrande.config.system.build.toplevel;
+      type = "nixos";
+      user = "root";
+    };
 
-  job2 = {
-    output = "host2";
-    hostname = "website.com";
-    type = "nixos";
-    user = "root";
-  };
-
-  job2 = {
-    output = "host3";
-    hostname = "host3.local";
-    user = "root";
-    type = "darwin";
+    fortree = {
+      output = self.darwinConfigurations.fortree.config.system.build.toplevel;
+      user = "aly";
+      type = "darwin";
+    };
   };
 }
 ```

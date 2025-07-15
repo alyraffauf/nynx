@@ -98,14 +98,14 @@ func info(format string, args ...any) {
 	fmt.Printf("[nynx] "+format+"\n", args...)
 }
 
-func instantiateDrvPath(flake string, spec JobSpec, builder string) (string, error) {
-	expr := fmt.Sprintf("%s#%sConfigurations.%s.config.system.build.toplevel", flake, spec.Type, spec.Output)
+func instantiateDrvPath(flake string, name string, builder string) (string, error) {
+	expr := fmt.Sprintf("%s#nynxDeployments.%s.output", flake, name)
 	drvExpr := expr + ".drvPath"
 
 	// Evaluate the .drv path locally
 	data, err := runJSON("nix", "--extra-experimental-features", "nix-command flakes", "eval", "--raw", drvExpr)
 	if err != nil {
-		return "", fmt.Errorf("failed to evaluate drvPath for %s: %w", spec.Output, err)
+		return "", fmt.Errorf("failed to evaluate drvPath for job '%s': %w", name, err)
 	}
 
 	drvPath := strings.TrimSpace(string(data))
@@ -113,16 +113,18 @@ func instantiateDrvPath(flake string, spec JobSpec, builder string) (string, err
 	// Copy the .drv to the remote builder (if needed)
 	if builder != "localhost" {
 		if _, err := run("nix", "--extra-experimental-features", "nix-command flakes", "copy", "--to", "ssh-ng://"+builder, drvPath); err != nil {
-			return "", fmt.Errorf("failed to copy .drv to %s: %w", builder, err)
+			return "", fmt.Errorf("failed to copy .drv for job '%s' to %s: %w", name, builder, err)
 		}
 	}
 
 	return drvPath, nil
 }
 
-func loadDeploymentSpec(cfg string) (map[string]JobSpec, error) {
+func loadDeployments(cfg string) (map[string]JobSpec, error) {
+	flakeReference := fmt.Sprintf("%s#nynxDeployments", cfg)
+
 	// Nix -> JSON
-	data, err := runJSON("nix", "eval", "--json", "-f", cfg)
+	data, err := runJSON("nix", "eval", "--json", flakeReference)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run nix eval on %s: %w", cfg, err)
 	}
@@ -158,18 +160,21 @@ func validateJobs(jobs map[string]JobSpec) (map[string]JobSpec, error) {
 	validated := make(map[string]JobSpec)
 
 	for name, spec := range jobs {
-		// Infer Output if missing
-		if spec.Output == "" {
-			spec.Output = name
-		}
+
 		// Infer Hostname if missing
 		if spec.Hostname == "" {
 			spec.Hostname = name
 		}
 
+		if spec.Output == "" {
+			return nil, fmt.Errorf("unsupported system type '%s' for job: %s", spec.Type, name)
+
+		}
+
 		if spec.User == "" {
 			return nil, fmt.Errorf("missing user for job: %s", name)
 		}
+
 		if spec.Type != "nixos" && spec.Type != "darwin" {
 			return nil, fmt.Errorf("unsupported system type '%s' for job: %s", spec.Type, name)
 		}
