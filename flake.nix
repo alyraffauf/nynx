@@ -100,7 +100,7 @@
       nixostest = {
         hostname = "nixostest"; # Will be assumed from deployment name if not specified.
         output = self.nixosConfigurations.nixostest.config.system.build.toplevel;
-        type = "nixos";
+        # type = "nixos"; # Will be inferred based on the output.
         user = "root";
       };
 

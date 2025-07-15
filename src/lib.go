@@ -156,7 +156,7 @@ func runJSON(cmd string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-func validateJobs(jobs map[string]JobSpec) (map[string]JobSpec, error) {
+func validateJobs(jobs map[string]JobSpec, flake string) (map[string]JobSpec, error) {
 	validated := make(map[string]JobSpec)
 
 	for name, spec := range jobs {
@@ -167,12 +167,30 @@ func validateJobs(jobs map[string]JobSpec) (map[string]JobSpec, error) {
 		}
 
 		if spec.Output == "" {
-			return nil, fmt.Errorf("unsupported system type '%s' for job: %s", spec.Type, name)
-
+			return nil, fmt.Errorf("missing 'output' for job: %s", name)
 		}
 
 		if spec.User == "" {
-			return nil, fmt.Errorf("missing user for job: %s", name)
+			return nil, fmt.Errorf("missing 'user' for job: %s", name)
+		}
+
+		// Infer Type if missing
+		if spec.Type == "" {
+			expr := fmt.Sprintf("%s#nynxDeployments.%s.output.system", flake, name)
+			data, err := run("nix", "--extra-experimental-features", "nix-command flakes", "eval", "--raw", expr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to infer type for job '%s': %w", name, err)
+			}
+			system := strings.TrimSpace(string(data))
+
+			switch {
+			case strings.Contains(system, "darwin"):
+				spec.Type = "darwin"
+			case strings.Contains(system, "linux"):
+				spec.Type = "nixos"
+			default:
+				return nil, fmt.Errorf("could not infer system type for job '%s' from system '%s'", name, system)
+			}
 		}
 
 		if spec.Type != "nixos" && spec.Type != "darwin" {

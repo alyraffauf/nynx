@@ -52,7 +52,7 @@ func main() {
 		fatal("Failed to load deployments: %v", err)
 	}
 
-	validatedJobs, err := validateJobs(jobs)
+	validatedJobs, err := validateJobs(jobs, flake)
 	if err != nil {
 		fatal("Invalid deployments: %v", err)
 	}
