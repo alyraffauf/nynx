@@ -89,22 +89,26 @@
       nixostest = self.inputs.nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ({ config, pkgs, ... }: {
-             imports = [ ];
+          ({
+            config,
+            pkgs,
+            ...
+          }: {
+            imports = [];
 
-             boot.loader.systemd-boot.enable = true;
-             boot.loader.efi.canTouchEfiVariables = true;
+            boot.loader.systemd-boot.enable = true;
+            boot.loader.efi.canTouchEfiVariables = true;
 
-             fileSystems."/" = {
-               device = "/dev/sda1";
-               fsType = "ext4";
-             };
+            fileSystems."/" = {
+              device = "/dev/sda1";
+              fsType = "ext4";
+            };
 
-             networking.hostName = "nixostest";
-             services.openssh.enable = true;
-             users.users.root.initialPassword = "changeme";
-             system.stateVersion = "25.05";
-           })
+            networking.hostName = "nixostest";
+            services.openssh.enable = true;
+            users.users.root.initialPassword = "changeme";
+            system.stateVersion = "25.05";
+          })
         ];
       };
     };
