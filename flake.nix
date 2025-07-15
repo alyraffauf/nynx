@@ -85,7 +85,7 @@
       };
 
       fortree = {
-        output = self.darwinConfigurations.fortree.config.system.build.toplevel;
+        output = self.inputs.nixcfg.darwinConfigurations.fortree.config.system.build.toplevel;
         user = "aly";
         type = "darwin";
       };
