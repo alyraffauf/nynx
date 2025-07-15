@@ -84,11 +84,11 @@
         user = "root";
       };
 
-      # fortree = {
-      #   output = self.darwinConfigurations.fortree.config.system.build.toplevel;
-      #   user = "aly";
-      #   type = "darwin";
-      # };
+      fortree = {
+        output = self.darwinConfigurations.fortree.config.system.build.toplevel;
+        user = "aly";
+        type = "darwin";
+      };
     };
   };
 }
