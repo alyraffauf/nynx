@@ -28,14 +28,14 @@ func buildClosure(flake string, spec JobSpec, builder string) (string, error) {
 	// Step 1: Evaluate the .drv path locally
 	data, err := runJSON("nix", "--extra-experimental-features", "nix-command flakes", "eval", "--raw", drvExpr)
 	if err != nil {
-		return "", fmt.Errorf("Failed to evaluate drvPath for %s: %w", spec.Output, err)
+		return "", fmt.Errorf("failed to evaluate drvPath for %s: %w", spec.Output, err)
 	}
 	drvPath := strings.TrimSpace(string(data))
 
 	// Step 2: Copy the .drv closure to the remote builder (if needed)
 	if builder != "localhost" {
 		if _, err := run("nix", "--extra-experimental-features", "nix-command flakes", "copy", "--to", "ssh-ng://"+builder, drvPath); err != nil {
-			return "", fmt.Errorf("Failed to copy .drv to %s: %w", builder, err)
+			return "", fmt.Errorf("failed to copy .drv to %s: %w", builder, err)
 		}
 	}
 
@@ -47,26 +47,26 @@ func buildClosure(flake string, spec JobSpec, builder string) (string, error) {
 		buildOut, err = runJSON("nix", "--extra-experimental-features", "nix-command flakes", "build", "--no-link", "--json", drvPath+"^*")
 	}
 	if err != nil {
-		return "", fmt.Errorf("Failed to build %s on %s: %w", spec.Output, builder, err)
+		return "", fmt.Errorf("failed to build %s on %s: %w", spec.Output, builder, err)
 	}
 
 	// Step 4: Parse the output path
 	var results []BuildResult
 	if err := json.Unmarshal(buildOut, &results); err != nil {
-		return "", fmt.Errorf("Invalid build JSON for %s: %w\nRaw: %s", spec.Output, err, string(buildOut))
+		return "", fmt.Errorf("invalid build JSON for %s: %w\nRaw: %s", spec.Output, err, string(buildOut))
 	}
 	if len(results) == 0 {
-		return "", fmt.Errorf("Build result for %s was empty", spec.Output)
+		return "", fmt.Errorf("build result for %s was empty", spec.Output)
 	}
 	out, ok := results[0].Outputs["out"]
 	if !ok {
-		return "", fmt.Errorf("Missing 'out' key in build result for %s", spec.Output)
+		return "", fmt.Errorf("missing 'out' key in build result for %s", spec.Output)
 	}
 
 	// Step 5: Copy built closure back from builder to local (if needed)
 	if builder != "localhost" {
 		if _, err := run("nix", "copy", "--from", "ssh-ng://"+builder, out, "--no-check-sigs"); err != nil {
-			return "", fmt.Errorf("Error copying from %s: %v", builder, err)
+			return "", fmt.Errorf("could not copy from %s: %v", builder, err)
 		}
 	}
 
@@ -117,11 +117,11 @@ func loadDeploymentSpec(cfg string) (map[string]JobSpec, error) {
 	// Nix -> JSON
 	data, err := runJSON("nix", "eval", "--json", "-f", cfg)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to run nix eval on %s: %w", cfg, err)
+		return nil, fmt.Errorf("failed to run nix eval on %s: %w", cfg, err)
 	}
 	jobs := make(map[string]JobSpec)
 	if err := json.Unmarshal(data, &jobs); err != nil {
-		return nil, fmt.Errorf("Invalid JSON in %s: %w", cfg, err)
+		return nil, fmt.Errorf("invalid JSON in %s: %w", cfg, err)
 	}
 	return jobs, nil
 }
@@ -161,10 +161,10 @@ func validateJobs(jobs map[string]JobSpec) (map[string]JobSpec, error) {
 		}
 
 		if spec.User == "" {
-			return nil, fmt.Errorf("Missing user for job: %s", name)
+			return nil, fmt.Errorf("missing user for job: %s", name)
 		}
 		if spec.Type != "nixos" && spec.Type != "darwin" {
-			return nil, fmt.Errorf("Unsupported system type '%s' for job: %s", spec.Type, name)
+			return nil, fmt.Errorf("unsupported system type '%s' for job: %s", spec.Type, name)
 		}
 
 		validated[name] = spec
