@@ -3,11 +3,13 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixcfg.url = "github:alyraffauf/nixcfg";
   };
 
   outputs = {
     self,
     nixpkgs,
+    nixcfg,
   }: let
     allSystems = [
       "aarch64-darwin"
@@ -73,5 +75,21 @@
           ];
       };
     });
+
+    nynxDeployments = {
+      evergrande = {
+        hostname = "evergrande"; # Will be assumed from deployment name if not specified.
+        output = self.inputs.nixcfg.nixosConfigurations.evergrande.config.system.build.toplevel;
+        type = "nixos";
+        user = "root";
+      };
+
+      # fortree = {
+      #   output = self.darwinConfigurations.fortree.config.system.build.toplevel;
+      #   user = "aly";
+      #   type = "darwin";
+      # };
+
+    };
   };
 }

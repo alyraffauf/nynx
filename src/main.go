@@ -3,7 +3,7 @@
 // A minimal NixOS deployment tool in Go.
 // Usage:
 //   go build -o nynx
-//   ./nynx --flake github:alyraffauf/nixcfg --operation test --deployments deployments.nix
+//   ./nynx --flake github:alyraffauf/nixcfg --operation test
 
 package main
 
@@ -18,7 +18,6 @@ import (
 func main() {
 	flakeDefault := os.Getenv("FLAKE")
 	opDefault := os.Getenv("OPERATION")
-	cfgDefault := os.Getenv("DEPLOYMENTS")
 
 	if flakeDefault == "" {
 		flakeDefault = "."
@@ -28,12 +27,7 @@ func main() {
 		opDefault = "test"
 	}
 
-	if cfgDefault == "" {
-		cfgDefault = "deployments.nix"
-	}
-
 	buildHostFlag := flag.String("build-host", "localhost", "Build closures on a specified remote host instead of locally.")
-	cfgFlag := flag.String("deployments", cfgDefault, "Path to deployments file.")
 	flakeFlag := flag.String("flake", flakeDefault, "Flake URL or path.")
 	jobsFlag := flag.String("jobs", "", "Filtered, comma-separated subset of deployment jobs to run.")
 	opFlag := flag.String("operation", opDefault, "Operation to perform.")
@@ -43,7 +37,6 @@ func main() {
 	flag.Parse()
 
 	buildHost := *buildHostFlag
-	cfg := *cfgFlag
 	flake := *flakeFlag
 	jobFilter := *jobsFlag
 	op := *opFlag
@@ -52,16 +45,16 @@ func main() {
 
 	verboseInfo(verbose, "Flake: %s", flake)
 	verboseInfo(verbose, "Operation: %s", op)
-	verboseInfo(verbose, "Config: %s", cfg)
 
-	jobs, err := loadDeploymentSpec(cfg)
+	jobs, err := loadDeployments(flake)
+
 	if err != nil {
-		fatal("Failed to load %s: %v", cfg, err)
+		fatal("Failed to load deployments: %v", err)
 	}
 
 	validatedJobs, err := validateJobs(jobs)
 	if err != nil {
-		fatal("Invalid jobs! Please check %s: %v", err, cfg)
+		fatal("Invalid deployments: %v", err)
 	}
 
 	jobs = validatedJobs
@@ -78,7 +71,7 @@ func main() {
 			if _, exists := jobs[skipJob]; exists {
 				delete(jobs, skipJob)
 			} else {
-				warn("Job '%s' not found in %s.", skipJob, cfg)
+				warn("Job '%s' not found in flake.nix.", skipJob)
 			}
 		}
 	}
@@ -94,7 +87,7 @@ func main() {
 			}
 			spec, ok := jobs[job]
 			if !ok {
-				fatal("Job '%s' not found in %s.", job, cfg)
+				fatal("Job '%s' not found in flake.nix.", job)
 			}
 			selectedJobs[job] = spec
 		}
@@ -114,23 +107,23 @@ func main() {
 	verboseInfo(verbose, "Instantiating drvPath(s) for %d job(s)...", len(jobs))
 
 	drvPaths := make(map[string]string, len(jobs))
-	for name, spec := range jobs {
-		verboseInfo(verbose, "Instantiating drvPath for %s#%s...", flake, spec.Output)
+	for name, _ := range jobs {
+		verboseInfo(verbose, "Instantiating drvPath for %s#nynxDeployments.%s.output...", flake, name)
 
-		drv, err := instantiateDrvPath(flake, spec, buildHost)
+		drv, err := instantiateDrvPath(flake, name, buildHost)
 		if err != nil {
 			fatal("Failed to instantiate drvPath for job '%s': %v", name, err)
 		}
 		drvPaths[name] = drv
 
-		info("✔ Instantiated drvPath for %s#%s.", flake, spec.Output)
+		info("✔ Instantiated drvPath for %s#nynxDeployments.%s.output.", flake, name)
 	}
 
 	verboseInfo(verbose, "Building closures for %d job(s)...", len(jobs))
 
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
-		verboseInfo(verbose, "Building %s#%s...", flake, spec.Output)
+		verboseInfo(verbose, "Building %s#nynxDeployments.%s.output...", flake, name)
 
 		out, err := buildClosure(spec, drvPaths[name], buildHost)
 		if err != nil {
@@ -156,7 +149,7 @@ func main() {
 			defer wg.Done()
 
 			target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
-			verboseInfo(verbose, "Deploying %s#%s to %s...", flake, spec.Output, target)
+			verboseInfo(verbose, "Deploying %s#nynxDeployments.%s.output to %s...", flake, name, target)
 			err := deployClosure(name, spec, outs, op)
 
 			if err != nil {
@@ -165,7 +158,7 @@ func main() {
 				errors = append(errors, err)
 				mu.Unlock()
 			} else {
-				info("✔ Deployed %s#%s to %s.", flake, spec.Output, target)
+				info("✔ Deployed %s#nynxDeployments.%s.output to %s.", flake, name, target)
 			}
 		}(name, spec)
 	}

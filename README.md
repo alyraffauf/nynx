@@ -44,7 +44,7 @@ nix run .#nynx -- --flake github:alyraffauf/nixcfg --operation switch --jobs ser
 
 ### Sample deployments.nix
 
-Nynx is configured with a Nix attrset that defines a set of deployment jobs.
+Nynx is configured with a Flake output containing an attrset that defines a set of deployment jobs.
 
 ```nix
 {
