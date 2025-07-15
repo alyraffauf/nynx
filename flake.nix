@@ -3,13 +3,11 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    nixcfg.url = "github:alyraffauf/nixcfg";
   };
 
   outputs = {
     self,
     nixpkgs,
-    nixcfg,
   }: let
     allSystems = [
       "aarch64-darwin"
@@ -59,6 +57,17 @@
       default = nynx;
     });
 
+    # darwinConfigurations = {
+    #   darwintest =  self.inputs.nix-darwin.lib.darwinSystem {
+    #     system = "aarch64-darwin";
+    #     modules = [
+    #       {
+    #         networking.hostName = "darwintest";
+    #       }
+    #     ];
+    #   };
+    # };
+
     devShells = forAllSystems ({pkgs}: {
       default = pkgs.mkShell {
         packages = with pkgs;
@@ -76,19 +85,30 @@
       };
     });
 
+    nixosConfigurations = {
+      nixostest = self.inputs.nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          {
+            networking.hostName = "nixostest";
+          }
+        ];
+      };
+    };
+
     nynxDeployments = {
-      evergrande = {
-        hostname = "evergrande"; # Will be assumed from deployment name if not specified.
-        output = self.inputs.nixcfg.nixosConfigurations.evergrande.config.system.build.toplevel;
+      nixostest = {
+        hostname = "nixostest"; # Will be assumed from deployment name if not specified.
+        output = self.nixosConfigurations.nixostest.config.system.build.toplevel;
         type = "nixos";
         user = "root";
       };
 
-      fortree = {
-        output = self.inputs.nixcfg.darwinConfigurations.fortree.config.system.build.toplevel;
-        user = "aly";
-        type = "darwin";
-      };
+      # fortree = {
+      #   output = self.inputs.nixcfg.darwinConfigurations.fortree.config.system.build.toplevel;
+      #   user = "aly";
+      #   type = "darwin";
+      # };
     };
   };
 }
