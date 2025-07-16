@@ -89,11 +89,7 @@
       nixostest = self.inputs.nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ({
-            config,
-            pkgs,
-            ...
-          }: {
+          ({...}: {
             imports = [];
 
             boot.loader.systemd-boot.enable = true;
