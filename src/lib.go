@@ -27,9 +27,9 @@ func buildClosure(spec JobSpec, drvPath string, builder string) (string, error) 
 
 	// Build the closure locally or on the remote builder
 	if builder != "localhost" {
-		buildOut, err = runJSON("nix", "--extra-experimental-features", "nix-command flakes", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, drvPath+"^*")
+		buildOut, err = runJSON("nix", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, drvPath+"^*")
 	} else {
-		buildOut, err = runJSON("nix", "--extra-experimental-features", "nix-command flakes", "build", "--no-link", "--json", drvPath+"^*")
+		buildOut, err = runJSON("nix", "build", "--no-link", "--json", drvPath+"^*")
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to build %s on %s: %w", spec.Output, builder, err)
@@ -103,7 +103,7 @@ func instantiateDrvPath(flake string, name string, builder string) (string, erro
 	drvExpr := expr + ".drvPath"
 
 	// Evaluate the .drv path locally
-	data, err := runJSON("nix", "--extra-experimental-features", "nix-command flakes", "eval", "--raw", drvExpr)
+	data, err := runJSON("nix", "eval", "--raw", drvExpr)
 	if err != nil {
 		return "", fmt.Errorf("failed to evaluate drvPath for job '%s': %w", name, err)
 	}
@@ -112,7 +112,7 @@ func instantiateDrvPath(flake string, name string, builder string) (string, erro
 
 	// Copy the .drv to the remote builder (if needed)
 	if builder != "localhost" {
-		if _, err := run("nix", "--extra-experimental-features", "nix-command flakes", "copy", "--to", "ssh-ng://"+builder, drvPath); err != nil {
+		if _, err := run("nix", "copy", "--to", "ssh-ng://"+builder, drvPath); err != nil {
 			return "", fmt.Errorf("failed to copy .drv for job '%s' to %s: %w", name, builder, err)
 		}
 	}
@@ -177,7 +177,7 @@ func validateJobs(jobs map[string]JobSpec, flake string) (map[string]JobSpec, er
 		// Infer Type if missing
 		if spec.Type == "" {
 			expr := fmt.Sprintf("%s#nynxDeployments.%s.output.system", flake, name)
-			data, err := run("nix", "--extra-experimental-features", "nix-command flakes", "eval", "--raw", expr)
+			data, err := run("nix", "eval", "--raw", expr)
 			if err != nil {
 				return nil, fmt.Errorf("failed to infer type for job '%s': %w", name, err)
 			}
