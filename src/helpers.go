@@ -124,7 +124,7 @@ func validateOperations(jobs map[string]JobSpec, op string) ([]string, error) {
 			}
 		case "nixos":
 			switch op {
-			case "test", "switch":
+			case "boot", "switch", "test":
 				continue
 			default:
 				return warnings, fmt.Errorf("unsupported NixOS operation: %s", op)
