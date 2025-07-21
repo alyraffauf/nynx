@@ -46,19 +46,13 @@ func main() {
 	verboseInfo(verbose, "Flake: %s", flake)
 	verboseInfo(verbose, "Operation: %s", op)
 
-	jobs, err := loadDeployments(flake)
+	jobs, err := evalDeployments(flake)
 
 	if err != nil {
-		fatal("Failed to load deployments: %v", err)
+		fatal("Failed to evaluate deployments: %v", err)
+	} else {
+		info("✔ Jobs evaluated.")
 	}
-
-	validatedJobs, err := validateJobs(jobs, flake)
-	if err != nil {
-		fatal("Invalid deployments: %v", err)
-	}
-
-	jobs = validatedJobs
-	verboseInfo(verbose, "✔ Deployments validated.")
 
 	// Skip provided jobs
 	if skipFilter != "" {
@@ -104,28 +98,13 @@ func main() {
 		verboseInfo(verbose, "✔ Operations validated.")
 	}
 
-	verboseInfo(verbose, "Instantiating drvPath(s) for %d job(s)...", len(jobs))
-
-	drvPaths := make(map[string]string, len(jobs))
-	for name, _ := range jobs {
-		verboseInfo(verbose, "Instantiating drvPath for %s#nynxDeployments.%s.output...", flake, name)
-
-		drv, err := instantiateDrvPath(flake, name, buildHost)
-		if err != nil {
-			fatal("Failed to instantiate drvPath for job '%s': %v", name, err)
-		}
-		drvPaths[name] = drv
-
-		info("✔ Instantiated drvPath for %s#nynxDeployments.%s.output.", flake, name)
-	}
-
 	verboseInfo(verbose, "Building closures for %d job(s)...", len(jobs))
 
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
 		verboseInfo(verbose, "Building %s#nynxDeployments.%s.output...", flake, name)
 
-		out, err := buildClosure(spec, drvPaths[name], buildHost)
+		out, err := buildClosure(spec, buildHost)
 		if err != nil {
 			fatal("Failure building closures: %v", err)
 		}

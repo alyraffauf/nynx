@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // model 'nix build --json' output.
@@ -11,15 +10,15 @@ type BuildResult struct {
 	Outputs map[string]string `json:"outputs"`
 }
 
-func buildClosure(spec JobSpec, drvPath string, builder string) (string, error) {
+func buildClosure(spec JobSpec, builder string) (string, error) {
 	var buildOut []byte
 	var err error
 
 	// Build the closure locally or on the remote builder
 	if builder != "localhost" {
-		buildOut, err = runJSON("nix", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, drvPath+"^*")
+		buildOut, err = runJSON("nix", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, spec.DrvPath+"^*")
 	} else {
-		buildOut, err = runJSON("nix", "build", "--no-link", "--json", drvPath+"^*")
+		buildOut, err = runJSON("nix", "build", "--no-link", "--json", spec.DrvPath+"^*")
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to build %s on %s: %w", spec.Output, builder, err)
@@ -77,26 +76,4 @@ func deployClosure(name string, spec JobSpec, outs map[string]string, op string)
 	}
 
 	return nil
-}
-
-func instantiateDrvPath(flake string, name string, builder string) (string, error) {
-	expr := fmt.Sprintf("%s#nynxDeployments.%s.output", flake, name)
-	drvExpr := expr + ".drvPath"
-
-	// Evaluate the .drv path locally
-	data, err := runJSON("nix", "eval", "--raw", drvExpr)
-	if err != nil {
-		return "", fmt.Errorf("failed to evaluate drvPath for job '%s': %w", name, err)
-	}
-
-	drvPath := strings.TrimSpace(string(data))
-
-	// Copy the .drv to the remote builder (if needed)
-	if builder != "localhost" {
-		if _, err := run("nix", "copy", "--to", "ssh-ng://"+builder, drvPath); err != nil {
-			return "", fmt.Errorf("failed to copy .drv for job '%s' to %s: %w", name, builder, err)
-		}
-	}
-
-	return drvPath, nil
 }
