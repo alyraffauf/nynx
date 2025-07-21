@@ -10,14 +10,14 @@ import (
 
 // Deployment spec for a single job.
 type JobSpec struct {
-	Output   string `json:"output"`   // flake output
-	Hostname string `json:"hostname"` // ssh host
-	Type     string `json:"type"`     // type (nixos, darwin)
-	User     string `json:"user"`     // ssh user
-	DrvPath  string // store path for derivation
+	Output   string `json:"output"`
+	Hostname string `json:"hostname"`
+	Type     string `json:"type"`
+	User     string `json:"user"`
+	DrvPath  string
 }
 
-// NixEvalJobsResult represents the output format of nix-eval-jobs
+// Output format of nix-eval-jobs
 type NixEvalJobsResult struct {
 	Attr     string            `json:"attr"`
 	AttrPath []string          `json:"attrPath"`
@@ -36,30 +36,30 @@ func info(format string, args ...any) {
 	fmt.Printf("[nynx] "+format+"\n", args...)
 }
 
+func getConfigAttr(cfg string, job string, attr string) string {
+	attrPath := fmt.Sprintf("%s#nynxDeployments.%s.%s", cfg, job, attr)
+	out, err := runJSON("nix", "eval", "--json", attrPath)
+	if err != nil {
+		return ""
+	}
+	var value string
+	if err := json.Unmarshal(out, &value); err != nil {
+		return ""
+	}
+	return value
+}
+
 func evalDeployments(cfg string) (map[string]JobSpec, error) {
 	flakeReference := fmt.Sprintf("%s#nynxDeployments", cfg)
 
-	// First evaluate the nix configuration to get user settings
-	configData, err := runJSON("nix", "eval", "--json", flakeReference)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load nix config from %s: %w", cfg, err)
-	}
-
-	// Parse the config JSON
-	config := make(map[string]JobSpec)
-	if err := json.Unmarshal(configData, &config); err != nil {
-		return nil, fmt.Errorf("invalid config JSON in %s: %w", cfg, err)
-	}
-
-	// Evaluate build outputs using nix-eval-jobs
 	data, err := runJSON("nix-eval-jobs", "--force-recurse", "--flake", flakeReference)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run nix-eval-jobs on %s: %w", cfg, err)
 	}
 
-	// Parse the newline-delimited JSON
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	jobs := make(map[string]JobSpec)
+	jobNames := make([]string, 0, len(lines))
 
 	for _, line := range lines {
 		var result NixEvalJobsResult
@@ -67,34 +67,33 @@ func evalDeployments(cfg string) (map[string]JobSpec, error) {
 			return nil, fmt.Errorf("invalid JSON line: %s: %w", line, err)
 		}
 
-		// Extract the job name from the attr path (e.g. ["jobname", "output"] -> "jobname")
 		if len(result.AttrPath) < 2 {
 			return nil, fmt.Errorf("invalid attrPath format: %v", result.AttrPath)
 		}
 		jobName := result.AttrPath[0]
+		jobNames = append(jobNames, jobName)
 
-		// Get the output path
 		outputPath, ok := result.Outputs["out"]
 		if !ok {
 			return nil, fmt.Errorf("missing 'out' output for job: %s", jobName)
 		}
 
-		// Get the config for this job
-		configSpec, ok := config[jobName]
-		if !ok {
-			return nil, fmt.Errorf("job '%s' found in evaluation but not in config", jobName)
-		}
-
-		// Create and validate the job spec
-		spec := JobSpec{
+		jobs[jobName] = JobSpec{
 			Output:   outputPath,
 			DrvPath:  result.DrvPath,
-			Hostname: configSpec.Hostname,
-			Type:     configSpec.Type,
-			User:     configSpec.User,
+			Type:     "",
+			Hostname: jobName,
+		}
+	}
+
+	for jobName, spec := range jobs {
+		if hostname := getConfigAttr(cfg, jobName, "hostname"); hostname != "" {
+			spec.Hostname = hostname
 		}
 
-		// Validate required fields and set defaults
+		spec.User = getConfigAttr(cfg, jobName, "user")
+		spec.Type = getConfigAttr(cfg, jobName, "type")
+
 		if spec.Output == "" {
 			return nil, fmt.Errorf("missing 'output' for job: %s", jobName)
 		}
@@ -103,21 +102,27 @@ func evalDeployments(cfg string) (map[string]JobSpec, error) {
 			return nil, fmt.Errorf("missing 'user' for job: %s", jobName)
 		}
 
-		// Set hostname to jobName if not specified
-		if spec.Hostname == "" {
-			spec.Hostname = jobName
-		}
-
 		// Infer Type if missing
 		if spec.Type == "" {
-			system := result.System
+			var systemFound string
+			// Find the matching job's system from original evaluation
+			for _, line := range lines {
+				var result NixEvalJobsResult
+				if err := json.Unmarshal([]byte(line), &result); err != nil {
+					continue
+				}
+				if len(result.AttrPath) > 0 && result.AttrPath[0] == jobName {
+					systemFound = result.System
+					break
+				}
+			}
 			switch {
-			case strings.Contains(system, "darwin"):
+			case strings.Contains(systemFound, "darwin"):
 				spec.Type = "darwin"
-			case strings.Contains(system, "linux"):
+			case strings.Contains(systemFound, "linux"):
 				spec.Type = "nixos"
 			default:
-				return nil, fmt.Errorf("could not infer system type for job '%s' from system '%s'", jobName, system)
+				return nil, fmt.Errorf("could not infer system type for job '%s' from system '%s'", jobName, systemFound)
 			}
 		}
 
