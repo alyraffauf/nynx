@@ -15,6 +15,10 @@ func buildClosure(spec JobSpec, builder string) (string, error) {
 
 	// Build the closure locally or on the remote builder
 	if builder != "localhost" {
+		if _, err := run("nix", "copy", "--to", "ssh-ng://"+builder, spec.DrvPath); err != nil {
+			return "", fmt.Errorf("failed to copy derivation to %s: %v", builder, err)
+		}
+
 		results, err = runJSON[[]BuildResult]("nix", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, spec.DrvPath+"^*")
 	} else {
 		results, err = runJSON[[]BuildResult]("nix", "build", "--no-link", "--json", spec.DrvPath+"^*")
@@ -30,7 +34,6 @@ func buildClosure(spec JobSpec, builder string) (string, error) {
 		return "", fmt.Errorf("missing 'out' key in build result for %s", spec.Output)
 	}
 
-	// Step 5: Copy built closure back from builder to local (if needed)
 	if builder != "localhost" {
 		if _, err := run("nix", "copy", "--from", "ssh-ng://"+builder, out, "--no-check-sigs"); err != nil {
 			return "", fmt.Errorf("could not copy from %s: %v", builder, err)
