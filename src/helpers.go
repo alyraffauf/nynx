@@ -38,12 +38,8 @@ func info(format string, args ...any) {
 
 func getConfigAttr(cfg string, job string, attr string) string {
 	attrPath := fmt.Sprintf("%s#nynxDeployments.%s.%s", cfg, job, attr)
-	out, err := runJSON("nix", "eval", "--json", attrPath)
+	value, err := runJSON[string]("nix", "eval", "--json", attrPath)
 	if err != nil {
-		return ""
-	}
-	var value string
-	if err := json.Unmarshal(out, &value); err != nil {
 		return ""
 	}
 	return value
@@ -52,27 +48,36 @@ func getConfigAttr(cfg string, job string, attr string) string {
 func evalDeployments(cfg string) (map[string]JobSpec, error) {
 	flakeReference := fmt.Sprintf("%s#nynxDeployments", cfg)
 
-	data, err := runJSON("nix-eval-jobs", "--force-recurse", "--flake", flakeReference)
+	// Get raw output since nix-eval-jobs uses JSON Lines format
+	c := exec.Command("nix-eval-jobs", "--force-recurse", "--flake", flakeReference)
+	out, err := c.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to run nix-eval-jobs on %s: %w", cfg, err)
+		if ee, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("failed to run nix-eval-jobs on %s: %s", cfg, string(ee.Stderr))
+		}
+		return nil, fmt.Errorf("failed to run nix-eval-jobs on %s: %v", cfg, err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	jobs := make(map[string]JobSpec)
-	jobNames := make([]string, 0, len(lines))
-
+	// Parse JSON Lines format
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	results := make([]NixEvalJobsResult, 0, len(lines))
 	for _, line := range lines {
 		var result NixEvalJobsResult
 		if err := json.Unmarshal([]byte(line), &result); err != nil {
-			return nil, fmt.Errorf("invalid JSON line: %s: %w", line, err)
+			return nil, fmt.Errorf("failed to parse JSON line from nix-eval-jobs: %w\nLine: %s", err, line)
 		}
+		results = append(results, result)
+	}
 
+	jobs := make(map[string]JobSpec, len(results))
+
+	// First pass: create basic job specs
+	for _, result := range results {
 		if len(result.AttrPath) < 2 {
 			return nil, fmt.Errorf("invalid attrPath format: %v", result.AttrPath)
 		}
-		jobName := result.AttrPath[0]
-		jobNames = append(jobNames, jobName)
 
+		jobName := result.AttrPath[0]
 		outputPath, ok := result.Outputs["out"]
 		if !ok {
 			return nil, fmt.Errorf("missing 'out' output for job: %s", jobName)
@@ -86,6 +91,7 @@ func evalDeployments(cfg string) (map[string]JobSpec, error) {
 		}
 	}
 
+	// Second pass: enrich specs with additional attributes
 	for jobName, spec := range jobs {
 		if hostname := getConfigAttr(cfg, jobName, "hostname"); hostname != "" {
 			spec.Hostname = hostname
@@ -104,18 +110,15 @@ func evalDeployments(cfg string) (map[string]JobSpec, error) {
 
 		// Infer Type if missing
 		if spec.Type == "" {
-			var systemFound string
 			// Find the matching job's system from original evaluation
-			for _, line := range lines {
-				var result NixEvalJobsResult
-				if err := json.Unmarshal([]byte(line), &result); err != nil {
-					continue
-				}
+			var systemFound string
+			for _, result := range results {
 				if len(result.AttrPath) > 0 && result.AttrPath[0] == jobName {
 					systemFound = result.System
 					break
 				}
 			}
+
 			switch {
 			case strings.Contains(systemFound, "darwin"):
 				spec.Type = "darwin"
@@ -145,16 +148,23 @@ func run(cmd string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-func runJSON(cmd string, args ...string) ([]byte, error) {
+func runJSON[T any](cmd string, args ...string) (T, error) {
+	var result T
 	c := exec.Command(cmd, args...)
 	out, err := c.Output() // only capture stdout
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(ee.Stderr))
+			return result, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(ee.Stderr))
 		}
-		return nil, fmt.Errorf("`%s %v` failed: %v", cmd, args, err)
+		return result, fmt.Errorf("`%s %v` failed: %v", cmd, args, err)
 	}
-	return out, nil
+
+	if err := json.Unmarshal(out, &result); err != nil {
+		return result, fmt.Errorf("failed to unmarshal JSON output from `%s %v`: %w\nRaw output: %s",
+			cmd, args, err, string(out))
+	}
+
+	return result, nil
 }
 
 func validateOperations(jobs map[string]JobSpec, op string) ([]string, error) {

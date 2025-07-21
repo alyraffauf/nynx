@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 )
 
@@ -11,23 +10,17 @@ type BuildResult struct {
 }
 
 func buildClosure(spec JobSpec, builder string) (string, error) {
-	var buildOut []byte
+	var results []BuildResult
 	var err error
 
 	// Build the closure locally or on the remote builder
 	if builder != "localhost" {
-		buildOut, err = runJSON("nix", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, spec.DrvPath+"^*")
+		results, err = runJSON[[]BuildResult]("nix", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, spec.DrvPath+"^*")
 	} else {
-		buildOut, err = runJSON("nix", "build", "--no-link", "--json", spec.DrvPath+"^*")
+		results, err = runJSON[[]BuildResult]("nix", "build", "--no-link", "--json", spec.DrvPath+"^*")
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to build %s on %s: %w", spec.Output, builder, err)
-	}
-
-	// Parse the output path
-	var results []BuildResult
-	if err := json.Unmarshal(buildOut, &results); err != nil {
-		return "", fmt.Errorf("invalid build JSON for %s: %w\nRaw: %s", spec.Output, err, string(buildOut))
 	}
 	if len(results) == 0 {
 		return "", fmt.Errorf("build result for %s was empty", spec.Output)
