@@ -54,7 +54,7 @@
 
         postInstall = ''
           wrapProgram $out/bin/nynx \
-            --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.nix-eval-jobs ]}
+            --prefix PATH : ${pkgs.lib.makeBinPath [pkgs.nix-eval-jobs]}
         '';
 
         version =
