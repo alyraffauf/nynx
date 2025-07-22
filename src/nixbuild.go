@@ -9,41 +9,42 @@ type BuildResult struct {
 	Outputs map[string]string `json:"outputs"`
 }
 
-func buildClosure(spec JobSpec, builder string) (string, error) {
+func buildClosure(spec JobSpec, builder string) (string, *DebugInfo, error) {
 	var results []BuildResult
 	var err error
+	var debug *DebugInfo
 
 	// Build the closure locally or on the remote builder
 	if builder != "localhost" {
-		if _, err := run("nix", "copy", "--to", "ssh-ng://"+builder, spec.DrvPath); err != nil {
-			return "", fmt.Errorf("failed to copy derivation to %s: %v", builder, err)
+		if _, debug, err = run("nix", "copy", "--to", "ssh-ng://"+builder, spec.DrvPath); err != nil {
+			return "", debug, fmt.Errorf("copy to %s: %v", builder, err)
 		}
 
-		results, err = runJSON[[]BuildResult]("nix", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, spec.DrvPath+"^*")
+		results, debug, err = runJSON[[]BuildResult]("nix", "build", "--no-link", "--json", "--store", "ssh-ng://"+builder, spec.DrvPath+"^*")
 	} else {
-		results, err = runJSON[[]BuildResult]("nix", "build", "--no-link", "--json", spec.DrvPath+"^*")
+		results, debug, err = runJSON[[]BuildResult]("nix", "build", "--no-link", "--json", spec.DrvPath+"^*")
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to build %s on %s: %w", spec.Output, builder, err)
+		return "", debug, fmt.Errorf("build on %s: %w", builder, err)
 	}
 	if len(results) == 0 {
-		return "", fmt.Errorf("build result for %s was empty", spec.Output)
+		return "", debug, fmt.Errorf("empty build result")
 	}
 	out, ok := results[0].Outputs["out"]
 	if !ok {
-		return "", fmt.Errorf("missing 'out' key in build result for %s", spec.Output)
+		return "", debug, fmt.Errorf("missing out key in build result")
 	}
 
 	if builder != "localhost" {
-		if _, err := run("nix", "copy", "--from", "ssh-ng://"+builder, out, "--no-check-sigs"); err != nil {
-			return "", fmt.Errorf("could not copy from %s: %v", builder, err)
+		if _, debug, err := run("nix", "copy", "--from", "ssh-ng://"+builder, out, "--no-check-sigs"); err != nil {
+			return "", debug, fmt.Errorf("copy from %s: %v", builder, err)
 		}
 	}
 
-	return out, nil
+	return out, debug, nil
 }
 
-func deployClosure(name string, spec JobSpec, outs map[string]string, op string) error {
+func deployClosure(name string, spec JobSpec, outs map[string]string, op string) (*DebugInfo, error) {
 	target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
 	path := outs[name]
 	var cmds [][]string
@@ -61,15 +62,17 @@ func deployClosure(name string, spec JobSpec, outs map[string]string, op string)
 		cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
 	}
 
-	if _, err := run("nix", "copy", "--to", "ssh-ng://"+target, path, "--no-check-sigs"); err != nil {
-		return fmt.Errorf("error copying to %s: %v", target, err)
+	var debug *DebugInfo
+	var err error
+	if _, debug, err = run("nix", "copy", "--to", "ssh-ng://"+target, path, "--no-check-sigs"); err != nil {
+		return debug, fmt.Errorf("copy to %s: %v", target, err)
 	}
 
 	for _, cmd := range cmds {
-		if _, err := run(cmd[0], cmd[1:]...); err != nil {
-			return fmt.Errorf("failed to activate on %s: %v", target, err)
+		if _, debug, err := run(cmd[0], cmd[1:]...); err != nil {
+			return debug, fmt.Errorf("activation on %s: %v", target, err)
 		}
 	}
 
-	return nil
+	return debug, nil
 }

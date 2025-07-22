@@ -3,10 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 )
+
+// DebugInfo contains command execution details for debugging
+type DebugInfo struct {
+	Command    string // The command that was run
+	StdOut     string // Standard output
+	StdErr     string // Standard error
+	WasSuccess bool   // Whether the command succeeded
+}
 
 // Deployment spec for a single job.
 type JobSpec struct {
@@ -27,36 +34,43 @@ type NixEvalJobsResult struct {
 	System   string            `json:"system"`
 }
 
-func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "[nynx] Error: "+format+"\n", args...)
-	os.Exit(1)
-}
-
-func info(format string, args ...any) {
-	fmt.Printf("[nynx] "+format+"\n", args...)
-}
-
-func getConfigAttr(cfg string, job string, attr string) string {
+// getConfigAttr evaluates a configuration attribute from the nix flake.
+// Returns empty string if evaluation fails.
+func getConfigAttr(cfg string, job string, attr string) (string, *DebugInfo, error) {
 	attrPath := fmt.Sprintf("%s#nynxDeployments.%s.%s", cfg, job, attr)
-	value, err := runJSON[string]("nix", "eval", "--json", attrPath)
+	value, debug, err := runJSON[string]("nix", "eval", "--json", attrPath)
 	if err != nil {
-		return ""
+		return "", debug, fmt.Errorf("failed to evaluate attribute %s for job %s: %w", attr, job, err)
 	}
-	return value
+	return value, debug, nil
 }
 
-func evalDeployments(cfg string) (map[string]JobSpec, error) {
+func evalDeployments(cfg string) (map[string]JobSpec, []*DebugInfo, error) {
+	var debugInfos []*DebugInfo
 	flakeReference := fmt.Sprintf("%s#nynxDeployments", cfg)
 
 	// Get raw output since nix-eval-jobs uses JSON Lines format
+	cmdStr := fmt.Sprintf("nix-eval-jobs --force-recurse --flake %s", flakeReference)
 	c := exec.Command("nix-eval-jobs", "--force-recurse", "--flake", flakeReference)
 	out, err := c.Output()
+
+	debug := &DebugInfo{
+		Command:    cmdStr,
+		WasSuccess: err == nil,
+	}
+
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("failed to run nix-eval-jobs on %s: %s", cfg, string(ee.Stderr))
+			debug.StdErr = string(ee.Stderr)
+			debugInfos = append(debugInfos, debug)
+			return nil, debugInfos, fmt.Errorf("failed to run nix-eval-jobs on %s: %s", cfg, string(ee.Stderr))
 		}
-		return nil, fmt.Errorf("failed to run nix-eval-jobs on %s: %v", cfg, err)
+		debugInfos = append(debugInfos, debug)
+		return nil, debugInfos, fmt.Errorf("failed to run nix-eval-jobs on %s: %v", cfg, err)
 	}
+
+	debug.StdOut = string(out)
+	debugInfos = append(debugInfos, debug)
 
 	// Parse JSON Lines format
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
@@ -64,7 +78,7 @@ func evalDeployments(cfg string) (map[string]JobSpec, error) {
 	for _, line := range lines {
 		var result NixEvalJobsResult
 		if err := json.Unmarshal([]byte(line), &result); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON line from nix-eval-jobs: %w\nLine: %s", err, line)
+			return nil, debugInfos, fmt.Errorf("invalid JSON output: %w", err)
 		}
 		results = append(results, result)
 	}
@@ -74,13 +88,13 @@ func evalDeployments(cfg string) (map[string]JobSpec, error) {
 	// First pass: create basic job specs
 	for _, result := range results {
 		if len(result.AttrPath) < 2 {
-			return nil, fmt.Errorf("invalid attrPath format: %v", result.AttrPath)
+			return nil, debugInfos, fmt.Errorf("malformed attrPath: %v", result.AttrPath)
 		}
 
 		jobName := result.AttrPath[0]
 		outputPath, ok := result.Outputs["out"]
 		if !ok {
-			return nil, fmt.Errorf("missing 'out' output for job: %s", jobName)
+			return nil, debugInfos, fmt.Errorf("job %s: missing 'out' output", jobName)
 		}
 
 		jobs[jobName] = JobSpec{
@@ -93,19 +107,27 @@ func evalDeployments(cfg string) (map[string]JobSpec, error) {
 
 	// Second pass: enrich specs with additional attributes
 	for jobName, spec := range jobs {
-		if hostname := getConfigAttr(cfg, jobName, "hostname"); hostname != "" {
+		if hostname, debug, err := getConfigAttr(cfg, jobName, "hostname"); err == nil && hostname != "" {
 			spec.Hostname = hostname
+			debugInfos = append(debugInfos, debug)
 		}
 
-		spec.User = getConfigAttr(cfg, jobName, "user")
-		spec.Type = getConfigAttr(cfg, jobName, "type")
+		if user, debug, err := getConfigAttr(cfg, jobName, "user"); err == nil {
+			spec.User = user
+			debugInfos = append(debugInfos, debug)
+		}
+
+		if sysType, debug, err := getConfigAttr(cfg, jobName, "type"); err == nil {
+			spec.Type = sysType
+			debugInfos = append(debugInfos, debug)
+		}
 
 		if spec.Output == "" {
-			return nil, fmt.Errorf("missing 'output' for job: %s", jobName)
+			return nil, debugInfos, fmt.Errorf("job %s: missing output path", jobName)
 		}
 
 		if spec.User == "" {
-			return nil, fmt.Errorf("missing 'user' for job: %s", jobName)
+			return nil, debugInfos, fmt.Errorf("job %s: missing user attribute", jobName)
 		}
 
 		// Infer Type if missing
@@ -125,46 +147,62 @@ func evalDeployments(cfg string) (map[string]JobSpec, error) {
 			case strings.Contains(systemFound, "linux"):
 				spec.Type = "nixos"
 			default:
-				return nil, fmt.Errorf("could not infer system type for job '%s' from system '%s'", jobName, systemFound)
+				return nil, debugInfos, fmt.Errorf("job %s: unknown system type %s", jobName, systemFound)
 			}
 		}
 
 		if spec.Type != "nixos" && spec.Type != "darwin" {
-			return nil, fmt.Errorf("unsupported system type '%s' for job: %s", spec.Type, jobName)
+			return nil, debugInfos, fmt.Errorf("job %s: unsupported system type %s", jobName, spec.Type)
 		}
 
 		jobs[jobName] = spec
 	}
 
-	return jobs, nil
+	return jobs, debugInfos, nil
 }
 
-func run(cmd string, args ...string) ([]byte, error) {
-	c := exec.Command(cmd, args...)
-	out, err := c.CombinedOutput()
-	if err != nil {
-		return out, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(out))
+func run(cmd string, args ...string) ([]byte, *DebugInfo, error) {
+	cmdStr := fmt.Sprintf("%s %s", cmd, strings.Join(args, " "))
+	debug := &DebugInfo{
+		Command: cmdStr,
 	}
-	return out, nil
+
+	out, err := exec.Command(cmd, args...).CombinedOutput()
+	debug.StdOut = string(out)
+	debug.WasSuccess = err == nil
+
+	if err != nil {
+		return out, debug, fmt.Errorf("%s failed: %s", cmdStr, strings.TrimSpace(string(out)))
+	}
+	return out, debug, nil
 }
 
-func runJSON[T any](cmd string, args ...string) (T, error) {
+func runJSON[T any](cmd string, args ...string) (T, *DebugInfo, error) {
 	var result T
+	cmdStr := fmt.Sprintf("%s %s", cmd, strings.Join(args, " "))
+	debug := &DebugInfo{
+		Command: cmdStr,
+	}
+
 	c := exec.Command(cmd, args...)
 	out, err := c.Output() // only capture stdout
+	debug.StdOut = string(out)
+	debug.WasSuccess = err == nil
+
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
-			return result, fmt.Errorf("`%s %v` failed: %s", cmd, args, string(ee.Stderr))
+			debug.StdErr = string(ee.Stderr)
+			return result, debug, fmt.Errorf("%s failed: %s", cmdStr, strings.TrimSpace(string(ee.Stderr)))
 		}
-		return result, fmt.Errorf("`%s %v` failed: %v", cmd, args, err)
+		return result, debug, fmt.Errorf("%s failed: %v", cmdStr, err)
 	}
 
 	if err := json.Unmarshal(out, &result); err != nil {
-		return result, fmt.Errorf("failed to unmarshal JSON output from `%s %v`: %w\nRaw output: %s",
-			cmd, args, err, string(out))
+		return result, debug, fmt.Errorf("failed to unmarshal JSON output from %s: %w\nRaw output: %s",
+			cmdStr, err, strings.TrimSpace(string(out)))
 	}
 
-	return result, nil
+	return result, debug, nil
 }
 
 func validateOperations(jobs map[string]JobSpec, op string) ([]string, error) {
@@ -193,14 +231,4 @@ func validateOperations(jobs map[string]JobSpec, op string) ([]string, error) {
 		}
 	}
 	return warnings, nil
-}
-
-func verboseInfo(verbose bool, format string, args ...any) {
-	if verbose {
-		info(format, args...)
-	}
-}
-
-func warn(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "[nynx] Warning: "+format+"\n", args...)
 }
