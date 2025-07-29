@@ -154,7 +154,7 @@ func main() {
 		if err != nil {
 			fatal("Failed to build system '%s': %v", name, err)
 		} else {
-			info(" ✔ %s (%s) -> %s@%s", name, spec.Type, spec.User, spec.Hostname)
+			info(" ✔ %s (%s)", name, spec.Type)
 
 		}
 		outs[name] = out
