@@ -59,7 +59,14 @@ func deployClosure(name string, spec JobSpec, outs map[string]string, op string)
 			cmds = append(cmds, []string{"ssh", target, "PATH=/run/current-system/sw/bin:$PATH", "sudo", path + "/activate"})
 		}
 	case "nixos":
-		cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
+		switch op {
+		case "switch", "boot":
+			cmds = append(cmds, []string{"ssh", target, "sudo", "nix-env", "-p", "/nix/var/nix/profiles/system", "--set", path})
+			fallthrough // we always want to activate
+		case "test":
+			cmds = append(cmds, []string{"ssh", target, "sudo", path + "/bin/switch-to-configuration", op})
+		}
+
 	}
 
 	var debug *DebugInfo
