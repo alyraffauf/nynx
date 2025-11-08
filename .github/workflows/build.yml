@@ -13,8 +13,17 @@ jobs:
         with:
           fetch-depth: 1
       - uses: DeterminateSystems/nix-installer-action@main
-      - name: Build deployer package
+      - name: Build nynx package
         run: nix build --accept-flake-config .#packages.x86_64-linux.nynx
+  build-nynx-lix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+        with:
+          fetch-depth: 1
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Build nynx package
+        run: nix build --accept-flake-config .#packages.x86_64-linux.nynx-lix
   build-devShell:
     runs-on: ubuntu-latest
     steps:
