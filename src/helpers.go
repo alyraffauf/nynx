@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -48,10 +50,22 @@ func getConfigAttr(cfg string, job string, attr string) (string, *DebugInfo, err
 func evalDeployments(cfg string) (map[string]JobSpec, []*DebugInfo, error) {
 	var debugInfos []*DebugInfo
 	flakeReference := fmt.Sprintf("%s#nynxDeployments", cfg)
+	cacheHome := os.Getenv("XDG_CACHE_HOME")
+
+	if cacheHome == "" {
+		cacheHome = filepath.Join(os.Getenv("HOME"), ".cache")
+	}
+
+	gcRootsDir := filepath.Join(cacheHome, "nynx")
+
+	// Create the directory if it doesn't exist
+	if err := os.MkdirAll(gcRootsDir, 0755); err != nil {
+		return nil, debugInfos, fmt.Errorf("failed to create gc-roots directory %s: %w", gcRootsDir, err)
+	}
 
 	// Get raw output since nix-eval-jobs uses JSON Lines format
-	cmdStr := fmt.Sprintf("nix-eval-jobs --force-recurse --flake %s", flakeReference)
-	c := exec.Command("nix-eval-jobs", "--force-recurse", "--flake", flakeReference)
+	cmdStr := fmt.Sprintf("nix-eval-jobs --gc-roots-dir %s --force-recurse --flake %s", gcRootsDir, flakeReference)
+	c := exec.Command("nix-eval-jobs", "--gc-roots-dir", gcRootsDir, "--force-recurse", "--flake", flakeReference)
 	out, err := c.Output()
 
 	debug := &DebugInfo{
