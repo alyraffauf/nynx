@@ -126,7 +126,7 @@ func main() {
 	}
 
 	info("Evaluating %d deployment%s...",
-		len(jobs), map[bool]string{true: "s", false: ""}[len(jobs) != 1])
+		len(jobs), plural(len(jobs)))
 
 	warnings, err := validateOperations(jobs, op)
 	for _, warning := range warnings {
@@ -137,7 +137,7 @@ func main() {
 	}
 
 	info("Building %d output%s...",
-		len(jobs), map[bool]string{true: "s", false: ""}[len(jobs) != 1])
+		len(jobs), plural(len(jobs)))
 
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
@@ -161,7 +161,7 @@ func main() {
 	}
 
 	info("Deploying %d output%s...",
-		len(jobs), map[bool]string{true: "s", false: ""}[len(jobs) != 1])
+		len(jobs), plural(len(jobs)))
 
 	// Deploy closures and report errors as warnings.
 	// We don't want to immediately run fatal() on the first error,

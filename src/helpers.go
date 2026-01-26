@@ -36,6 +36,13 @@ type NixEvalJobsResult struct {
 	System   string            `json:"system"`
 }
 
+func plural(count int) string {
+	if count != 1 {
+		return "s"
+	}
+	return ""
+}
+
 // getConfigAttr evaluates a configuration attribute from the nix flake.
 // Returns empty string if evaluation fails.
 func getConfigAttr(cfg string, job string, attr string) (string, *DebugInfo, error) {
