@@ -63,19 +63,12 @@ func main() {
 	skipFlag := flag.String("skip", "", "Comma-separated list of deployment jobs to skip.")
 	flag.Parse()
 
-	buildHost := *buildHostFlag
-	flake := *flakeFlag
-	jobFilter := *jobsFlag
-	op := *opFlag
-	skipFilter := *skipFlag
-	debugMode := *debugFlag
-	debugEnabled = debugMode
-
+	debugEnabled = *debugFlag
 	startTime := time.Now()
 
-	info("Deploying from %s", flake)
-	jobs, debugInfos, err := evalDeployments(flake)
-	if debugMode && len(debugInfos) > 0 {
+	info("Deploying from %s", *flakeFlag)
+	jobs, debugInfos, err := evalDeployments(*flakeFlag)
+	if debugEnabled && len(debugInfos) > 0 {
 		for _, d := range debugInfos {
 			debugLog("$ %s", d.Command)
 			if d.StdOut != "" {
@@ -91,8 +84,8 @@ func main() {
 	}
 
 	// Skip provided jobs
-	if skipFilter != "" {
-		skipJobs := strings.SplitSeq(skipFilter, ",")
+	if *skipFlag != "" {
+		skipJobs := strings.SplitSeq(*skipFlag, ",")
 		for skipJob := range skipJobs {
 			skipJob = strings.TrimSpace(skipJob)
 			if skipJob == "" {
@@ -108,9 +101,9 @@ func main() {
 	}
 
 	// Filter jobs if --jobs is provided.
-	if jobFilter != "" {
+	if *jobsFlag != "" {
 		selectedJobs := make(map[string]JobSpec)
-		jobList := strings.SplitSeq(jobFilter, ",")
+		jobList := strings.SplitSeq(*jobsFlag, ",")
 		for job := range jobList {
 			job = strings.TrimSpace(job)
 			if job == "" {
@@ -128,12 +121,12 @@ func main() {
 	info("Evaluating %d deployment%s...",
 		len(jobs), plural(len(jobs)))
 
-	warnings, err := validateOperations(jobs, op)
+	warnings, err := validateOperations(jobs, *opFlag)
 	for _, warning := range warnings {
 		warn("%s", warning)
 	}
 	if err != nil {
-		fatal("Invalid operation '%s': %v", op, err)
+		fatal("Invalid operation '%s': %v", *opFlag, err)
 	}
 
 	info("Building %d output%s...",
@@ -141,8 +134,8 @@ func main() {
 
 	outs := make(map[string]string, len(jobs))
 	for name, spec := range jobs {
-		out, debug, err := buildClosure(spec, buildHost)
-		if debugMode && debug != nil {
+		out, debug, err := buildClosure(spec, *buildHostFlag)
+		if debugEnabled && debug != nil {
 			debugLog("$ %s", debug.Command)
 			if debug.StdOut != "" {
 				debugLog("Output:\n%s", strings.TrimSpace(debug.StdOut))
@@ -177,8 +170,8 @@ func main() {
 
 			target := fmt.Sprintf("%s@%s", spec.User, spec.Hostname)
 
-			debug, err := deployClosure(name, spec, outs, op)
-			if debugMode && debug != nil {
+			debug, err := deployClosure(name, spec, outs, *opFlag)
+			if debugEnabled && debug != nil {
 				debugLog("$ %s", debug.Command)
 				if debug.StdOut != "" {
 					debugLog("Output:\n%s", strings.TrimSpace(debug.StdOut))
