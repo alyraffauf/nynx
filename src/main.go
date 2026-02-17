@@ -35,14 +35,6 @@ func fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
-func formatErrors(errors []error) []string {
-	result := make([]string, len(errors))
-	for i, err := range errors {
-		result[i] = "  - " + err.Error()
-	}
-	return result
-}
-
 func main() {
 	flakeDefault := os.Getenv("FLAKE")
 	opDefault := os.Getenv("OPERATION")
