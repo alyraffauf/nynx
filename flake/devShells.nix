@@ -12,7 +12,7 @@ _: {
           go
           gopls
           nixd
-          nodePackages.prettier
+          prettier
         ]
         ++ lib.attrValues config.treefmt.build.programs
         ++ [
