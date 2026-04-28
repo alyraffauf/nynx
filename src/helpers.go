@@ -31,6 +31,7 @@ type NixEvalJobsResult struct {
 	Attr     string            `json:"attr"`
 	AttrPath []string          `json:"attrPath"`
 	DrvPath  string            `json:"drvPath"`
+	Error    string            `json:"error"`
 	Name     string            `json:"name"`
 	Outputs  map[string]string `json:"outputs"`
 	System   string            `json:"system"`
@@ -108,6 +109,10 @@ func evalDeployments(cfg string) (map[string]JobSpec, []*DebugInfo, error) {
 
 	// First pass: create basic job specs
 	for _, result := range results {
+		if result.Error != "" {
+			return nil, debugInfos, fmt.Errorf("%s", result.Error)
+		}
+
 		if len(result.AttrPath) < 2 {
 			return nil, debugInfos, fmt.Errorf("malformed attrPath: %v", result.AttrPath)
 		}
